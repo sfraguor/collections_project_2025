@@ -7,13 +7,29 @@ import {
   Alert,
   StyleSheet,
   TextInput,
+  ActivityIndicator,
+  ScrollView,
+  StatusBar,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ItemCard from '../components/ItemCard';
 import ItemDetailModal from '../components/ItemDetailModal';
 import SortModal from '../components/SortModal';
+import ShareCollectionModal from '../components/ShareCollectionModal';
+import { useTheme } from '../theme/theme';
+import { 
+  AddIcon, 
+  SortIcon, 
+  SearchIcon, 
+  ShareIcon, 
+  FilterIcon,
+  TagIcon,
+  ClearIcon
+} from '../components/AppIcons';
 
 const CollectionScreen = ({ route, navigation }) => {
+  const { theme, colors } = useTheme();
   const { collectionId } = route.params;
   const [items, setItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,22 +38,55 @@ const CollectionScreen = ({ route, navigation }) => {
   const [showSortModal, setShowSortModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [showItemModal, setShowItemModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [availableTags, setAvailableTags] = useState([]);
+  const [showTagFilter, setShowTagFilter] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', async () => {
-      const data = await AsyncStorage.getItem(collectionId);
-      setItems(data ? JSON.parse(data) : []);
-    });
+    const loadItems = async () => {
+      setLoading(true);
+      try {
+        const data = await AsyncStorage.getItem(collectionId);
+        const itemsData = data ? JSON.parse(data) : [];
+        setItems(itemsData);
+        
+        // Extract all unique tags from items
+        const allTags = new Set();
+        itemsData.forEach(item => {
+          if (item.tags && Array.isArray(item.tags)) {
+            item.tags.forEach(tag => allTags.add(tag));
+          }
+        });
+        setAvailableTags(Array.from(allTags));
+      } catch (error) {
+        Alert.alert('Error', 'Failed to load items');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    const unsubscribe = navigation.addListener('focus', loadItems);
+    loadItems();
     return unsubscribe;
   }, [navigation, collectionId]);
 
-  // Filter items based on search query
-  const filteredItems = items.filter(item => 
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (item.condition && item.condition.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Filter items based on search query and selected tags
+  const filteredItems = items.filter(item => {
+    // Text search filter
+    const matchesSearch = 
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (item.condition && item.condition.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    // Tag filter
+    const matchesTags = selectedTags.length === 0 || 
+      (item.tags && selectedTags.every(tag => item.tags.includes(tag)));
+    
+    return matchesSearch && matchesTags;
+  });
 
   // Sort items based on sortBy and sortOrder
   const sortedItems = [...filteredItems].sort((a, b) => {
@@ -122,43 +171,142 @@ const CollectionScreen = ({ route, navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search items..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        <TouchableOpacity 
-          style={styles.sortButton}
-          onPress={() => setShowSortModal(true)}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar
+        barStyle={theme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.background}
+      />
+      <View style={styles.headerActions}>
+        <LinearGradient
+          colors={[colors.secondary, colors.secondaryLight]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.shareButtonGradient}
         >
-          <Text style={styles.sortButtonText}>Sort</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={() => setShowShareModal(true)}
+          >
+            <ShareIcon color="#FFFFFF" size={18} style={styles.shareButtonIcon} />
+            <Text style={styles.shareButtonText}>Share Collection</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+        
+        <View style={styles.searchContainer}>
+          <View style={[styles.searchInputContainer, { 
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          }]}>
+            <SearchIcon color={colors.placeholder} size={20} style={styles.searchIcon} />
+            <TextInput
+              style={[styles.searchInput, { 
+                color: colors.text
+              }]}
+              placeholder="Search items..."
+              placeholderTextColor={colors.placeholder}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
+          <TouchableOpacity 
+            style={[styles.sortButton, { backgroundColor: colors.primary }]}
+            onPress={() => setShowSortModal(true)}
+          >
+            <SortIcon color="#FFFFFF" size={20} />
+          </TouchableOpacity>
+        </View>
       </View>
       
-      <FlatList
-        data={sortedItems}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {searchQuery ? 'No items match your search' : 'No items yet'}
-          </Text>
-        }
-        contentContainerStyle={{ paddingBottom: 80 }}
-      />
+      {availableTags.length > 0 && (
+        <View style={styles.tagFilterContainer}>
+          <TouchableOpacity
+            style={[styles.tagFilterButton, { backgroundColor: colors.secondary }]}
+            onPress={() => setShowTagFilter(!showTagFilter)}
+          >
+            <TagIcon color="#FFFFFF" size={18} style={styles.tagFilterIcon} />
+            <Text style={styles.tagFilterButtonText}>
+              {selectedTags.length > 0 
+                ? `Filtered by ${selectedTags.length} tag${selectedTags.length > 1 ? 's' : ''}` 
+                : 'Filter by Tags'}
+            </Text>
+          </TouchableOpacity>
+          
+          {showTagFilter && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.tagsScrollView}
+              contentContainerStyle={styles.tagsContainer}
+            >
+              {availableTags.map(tag => (
+                <TouchableOpacity
+                  key={tag}
+                  style={[
+                    styles.tagChip,
+                    { 
+                      backgroundColor: selectedTags.includes(tag) 
+                        ? colors.primary 
+                        : colors.border
+                    }
+                  ]}
+                  onPress={() => {
+                    if (selectedTags.includes(tag)) {
+                      setSelectedTags(selectedTags.filter(t => t !== tag));
+                    } else {
+                      setSelectedTags([...selectedTags, tag]);
+                    }
+                  }}
+                >
+                  <Text 
+                    style={[
+                      styles.tagChipText,
+                      { color: selectedTags.includes(tag) ? '#fff' : colors.text }
+                    ]}
+                  >
+                    {tag}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              
+              {selectedTags.length > 0 && (
+                <TouchableOpacity
+                  style={[styles.clearTagsButton, { backgroundColor: colors.danger }]}
+                  onPress={() => setSelectedTags([])}
+                >
+                  <ClearIcon color="#FFFFFF" size={14} style={styles.clearTagsIcon} />
+                  <Text style={styles.clearTagsButtonText}>Clear All</Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          )}
+        </View>
+      )}
+      
+      {loading ? (
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+      ) : (
+        <FlatList
+          data={sortedItems}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          ListEmptyComponent={
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {searchQuery ? 'No items match your search' : 'No items yet'}
+            </Text>
+          }
+          contentContainerStyle={{ paddingBottom: 80 }}
+        />
+      )}
       
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { backgroundColor: colors.primary }]}
         onPress={() =>
           navigation.navigate('AddItem', {
             collectionId,
           })
         }
       >
-        <Text style={styles.fabText}>+ Add Item</Text>
+        <AddIcon color="#FFFFFF" size={24} />
       </TouchableOpacity>
       
       <SortModal
@@ -177,6 +325,12 @@ const CollectionScreen = ({ route, navigation }) => {
         onEdit={handleItemEdit}
         onDelete={handleItemDelete}
       />
+      
+      <ShareCollectionModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        collection={route.params}
+      />
     </View>
   );
 };
@@ -184,137 +338,166 @@ const CollectionScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
     paddingHorizontal: 16,
     paddingTop: 16,
   },
+  headerActions: {
+    marginBottom: 16,
+  },
+  shareButtonGradient: {
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  shareButton: {
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  shareButtonIcon: {
+    marginRight: 6,
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.3,
+  },
   searchContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
+  },
+  searchInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  searchIcon: {
+    marginLeft: 12,
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
     fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
   },
   sortButton: {
-    backgroundColor: '#222',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: 12,
+    width: 48,
+    height: 48,
     marginLeft: 8,
     justifyContent: 'center',
-  },
-  sortButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    marginBottom: 16,
-    paddingBottom: 12,
-    overflow: 'hidden',
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  coverImage: {
-    width: '100%',
-    height: 160,
+  tagFilterContainer: {
+    marginBottom: 16,
   },
-  noImageContainer: {
-    backgroundColor: '#f0f0f0',
+  tagFilterButton: {
+    borderRadius: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  noImageText: {
-    color: '#888',
-    fontSize: 16,
-    fontWeight: '500',
+  tagFilterIcon: {
+    marginRight: 6,
   },
-  cardTextContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#222',
-  },
-  cardSubtitle: {
+  tagFilterButtonText: {
+    color: '#fff',
+    fontWeight: '700',
     fontSize: 14,
-    fontWeight: '400',
-    color: '#666',
-    marginTop: 4,
+    letterSpacing: 0.3,
   },
-  cardPrice: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#444',
-    marginTop: 4,
+  tagsScrollView: {
+    maxHeight: 40,
   },
-  cardCondition: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
+  tagsContainer: {
+    paddingRight: 8,
+    paddingBottom: 4,
   },
-  cardActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    marginTop: 4,
-  },
-  editButton: {
-    backgroundColor: '#222',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  tagChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     marginRight: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
-  editButtonText: {
-    color: 'white',
+  tagChipText: {
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
-  deleteButton: {
-    backgroundColor: '#f33',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  clearTagsButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
-  deleteButtonText: {
-    color: 'white',
+  clearTagsIcon: {
+    marginRight: 4,
+  },
+  clearTagsButtonText: {
+    color: '#fff',
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
   emptyText: {
     textAlign: 'center',
     marginTop: 40,
     fontSize: 16,
-    color: '#888',
   },
   fab: {
     position: 'absolute',
-    bottom: 32,
-    right: 20,
-    backgroundColor: '#222',
-    borderRadius: 30,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    elevation: 5,
+    bottom: 24,
+    right: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   fabText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: '800',
+    fontSize: 24,
   },
 });
 

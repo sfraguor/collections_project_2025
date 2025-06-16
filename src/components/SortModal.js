@@ -1,6 +1,7 @@
 // src/components/SortModal.js
 import React from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import { useTheme } from '../theme/theme';
 
 /**
  * A modal component for selecting sorting options
@@ -22,6 +23,8 @@ export default function SortModal({
   options,
   onSelect 
 }) {
+  const { colors } = useTheme();
+  
   return (
     <Modal
       visible={visible}
@@ -30,19 +33,26 @@ export default function SortModal({
       onRequestClose={onClose}
     >
       <TouchableOpacity 
-        style={styles.modalOverlay} 
+        style={[styles.modalOverlay, { backgroundColor: colors.overlay }]} 
         activeOpacity={1} 
         onPress={onClose}
       >
-        <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-          <Text style={styles.modalTitle}>Sort By</Text>
+        <View 
+          style={[styles.modalContent, { backgroundColor: colors.card }]} 
+          onStartShouldSetResponder={() => true}
+        >
+          <Text style={[styles.modalTitle, { color: colors.text }]}>Sort By</Text>
           
           {options.map((option) => (
             <TouchableOpacity 
               key={option.value}
               style={[
                 styles.sortOption, 
-                sortBy === option.value && styles.selectedSortOption
+                { borderBottomColor: colors.border },
+                sortBy === option.value && [
+                  styles.selectedSortOption, 
+                  { backgroundColor: colors.border }
+                ]
               ]} 
               onPress={() => {
                 onSelect(
@@ -51,14 +61,17 @@ export default function SortModal({
                 );
               }}
             >
-              <Text style={styles.sortOptionText}>
+              <Text style={[styles.sortOptionText, { color: colors.text }]}>
                 {option.label} {sortBy === option.value ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
               </Text>
             </TouchableOpacity>
           ))}
           
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>Cancel</Text>
+          <TouchableOpacity 
+            style={[styles.closeButton, { backgroundColor: colors.border }]} 
+            onPress={onClose}
+          >
+            <Text style={[styles.closeButtonText, { color: colors.text }]}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -69,12 +82,10 @@ export default function SortModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
     borderRadius: 16,
     padding: 20,
     width: '80%',
@@ -89,10 +100,9 @@ const styles = StyleSheet.create({
   sortOption: {
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   selectedSortOption: {
-    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
   },
   sortOptionText: {
     fontSize: 16,
@@ -100,7 +110,6 @@ const styles = StyleSheet.create({
   closeButton: {
     marginTop: 16,
     paddingVertical: 12,
-    backgroundColor: '#f0f0f0',
     borderRadius: 8,
     alignItems: 'center',
   },

@@ -1,6 +1,6 @@
 # Colecciones React Native App
 
-Esta aplicación permite gestionar tus colecciones personales (cartas, figuras, artbooks, etc.) con fotos, precios y detalles.
+Esta aplicación permite gestionar tus colecciones personales (cartas, figuras, artbooks, etc.) con fotos, precios, etiquetas y detalles.
 
 ---
 
@@ -13,7 +13,11 @@ Esta aplicación permite gestionar tus colecciones personales (cartas, figuras, 
 - **Búsqueda**: Busca colecciones e items por nombre y otros campos
 - **Ordenación**: Ordena colecciones por nombre o cantidad de items, y ordena items por nombre, precio, fecha, etc.
 - **Vista Detallada**: Visualiza todos los detalles de un item en una vista modal
-- **Estadísticas**: Visualiza el número de items en cada colección
+- **Estadísticas**: Visualiza estadísticas detalladas de tus colecciones (total de items, valor, etc.)
+- **Sistema de Etiquetas**: Añade y filtra items por etiquetas personalizadas
+- **Tema Claro/Oscuro**: Cambia entre tema claro y oscuro según tus preferencias
+- **Backup y Restauración**: Exporta e importa tus colecciones completas o individuales
+- **Compartir Colecciones**: Comparte tus colecciones con otros usuarios mediante enlaces o archivos
 
 ---
 
@@ -23,7 +27,10 @@ Esta aplicación permite gestionar tus colecciones personales (cartas, figuras, 
 - React Navigation (stack)
 - AsyncStorage para almacenamiento local
 - Expo Image Picker para seleccionar imágenes
+- Expo File System y Document Picker para exportación/importación de datos
+- Expo Sharing para compartir archivos de backup
 - Componentes modales para vistas detalladas y opciones de ordenación
+- Context API para gestión de temas
 
 ---
 
@@ -62,14 +69,24 @@ npm start
   - `AddItemScreen.js`: Formulario para añadir items
   - `EditItemScreen.js`: Formulario para editar items
 - `/src/components`: Componentes reutilizables
+  - `CollectionItem.js`: Componente para mostrar una colección
+  - `ItemCard.js`: Componente para mostrar un item
+  - `ItemDetailModal.js`: Modal para ver detalles de un item
+  - `SortModal.js`: Modal para opciones de ordenación
+  - `TagSelector.js`: Componente para seleccionar etiquetas
+  - `CollectionStats.js`: Componente para mostrar estadísticas
+  - `ThemeToggle.js`: Componente para cambiar el tema
+- `/src/theme`: Sistema de temas
+  - `theme.js`: Definición de colores y estilos para temas
 - `/assets`: Imágenes y recursos estáticos
 
 ---
 
 ## Mejoras Futuras
 
-- Implementar sistema de categorías y etiquetas para items
-- Añadir soporte para temas (modo oscuro/claro)
 - Implementar sincronización en la nube
-- Añadir gráficos y estadísticas avanzadas
-- Implementar exportación/importación de datos
+- Añadir gráficos y estadísticas más avanzadas
+- Añadir soporte para múltiples idiomas
+- Implementar notificaciones para recordatorios
+- Añadir funcionalidad de copia de seguridad automática
+- Implementar sistema de usuarios y autenticación

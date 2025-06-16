@@ -1,6 +1,10 @@
 // src/components/ItemDetailModal.js
-import React from 'react';
-import { View, Text, Image, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Image, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
+import { useTheme } from '../theme/theme';
+import ImageGallery from './ImageGallery';
+import FullscreenImageViewer from './FullscreenImageViewer';
+import { EditIcon, DeleteIcon } from './AppIcons';
 
 /**
  * A modal component for displaying detailed information about an item
@@ -18,7 +22,17 @@ export default function ItemDetailModal({
   onEdit, 
   onDelete 
 }) {
+  const { colors } = useTheme();
+  const [fullscreenVisible, setFullscreenVisible] = useState(false);
+  const [fullscreenIndex, setFullscreenIndex] = useState(0);
+  
   if (!item) return null;
+  
+  // Handle image press to open fullscreen viewer
+  const handleImagePress = (image, index) => {
+    setFullscreenIndex(index);
+    setFullscreenVisible(true);
+  };
   
   return (
     <Modal
@@ -28,61 +42,91 @@ export default function ItemDetailModal({
       onRequestClose={onClose}
     >
       <TouchableOpacity 
-        style={styles.modalOverlay} 
+        style={[styles.modalOverlay, { backgroundColor: colors.overlay }]} 
         activeOpacity={1} 
         onPress={onClose}
       >
-        <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-          <Text style={styles.modalTitle}>{item.name}</Text>
+        <View 
+          style={[styles.modalContent, { backgroundColor: colors.card }]} 
+          onStartShouldSetResponder={() => true}
+        >
+          <ScrollView 
+            style={styles.modalScrollView}
+            contentContainerStyle={styles.modalScrollContent}
+            showsVerticalScrollIndicator={true}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{item.name}</Text>
           
-          {item.image ? (
+          {/* Display images using ImageGallery component */}
+          {item.images && item.images.length > 0 ? (
+            <ImageGallery 
+              images={item.images} 
+              height={220}
+              showThumbnails={true}
+              allowFullscreen={true}
+              onImagePress={handleImagePress}
+            />
+          ) : item.image ? (
+            // For backward compatibility with old items that have a single image
             <Image source={{ uri: item.image }} style={styles.modalImage} />
           ) : (
-            <View style={[styles.modalImage, styles.noImageContainer]}>
-              <Text style={styles.noImageText}>No Image</Text>
+            <View style={[
+              styles.modalImage, 
+              styles.noImageContainer,
+              { backgroundColor: colors.border }
+            ]}>
+              <Text style={[styles.noImageText, { color: colors.textSecondary }]}>No Images</Text>
             </View>
           )}
+          
+          {/* Fullscreen image viewer */}
+          <FullscreenImageViewer
+            images={item.images || (item.image ? [item.image] : [])}
+            initialIndex={fullscreenIndex}
+            visible={fullscreenVisible}
+            onClose={() => setFullscreenVisible(false)}
+          />
           
           <View style={styles.modalDetails}>
             {item.description ? (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Description:</Text>
-                <Text style={styles.detailValue}>{item.description}</Text>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Description:</Text>
+                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>{item.description}</Text>
               </View>
             ) : null}
             
             {item.price ? (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Price:</Text>
-                <Text style={styles.detailValue}>{item.price}</Text>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Price:</Text>
+                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>{item.price}</Text>
               </View>
             ) : null}
             
             {item.purchaseDate ? (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Purchase Date:</Text>
-                <Text style={styles.detailValue}>{item.purchaseDate}</Text>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Purchase Date:</Text>
+                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>{item.purchaseDate}</Text>
               </View>
             ) : null}
             
             {item.condition ? (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Condition:</Text>
-                <Text style={styles.detailValue}>{item.condition}</Text>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Condition:</Text>
+                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>{item.condition}</Text>
               </View>
             ) : null}
             
             {item.notes ? (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Notes:</Text>
-                <Text style={styles.detailValue}>{item.notes}</Text>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Notes:</Text>
+                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>{item.notes}</Text>
               </View>
             ) : null}
             
             {item.createdAt ? (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Added:</Text>
-                <Text style={styles.detailValue}>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Added:</Text>
+                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>
                   {new Date(item.createdAt).toLocaleDateString()}
                 </Text>
               </View>
@@ -90,36 +134,55 @@ export default function ItemDetailModal({
             
             {item.updatedAt ? (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Last Updated:</Text>
-                <Text style={styles.detailValue}>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Last Updated:</Text>
+                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>
                   {new Date(item.updatedAt).toLocaleDateString()}
                 </Text>
+              </View>
+            ) : null}
+            
+            {item.tags && item.tags.length > 0 ? (
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Tags:</Text>
+                <View style={styles.tagsContainer}>
+                  {item.tags.map(tag => (
+                    <View 
+                      key={tag} 
+                      style={[styles.tagChip, { backgroundColor: colors.primary }]}
+                    >
+                      <Text style={styles.tagChipText}>{tag}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
             ) : null}
           </View>
           
           <View style={styles.modalActions}>
             <TouchableOpacity 
-              style={styles.editButton}
+              style={[styles.editButton, { backgroundColor: colors.primary }]}
               onPress={onEdit}
             >
+              <EditIcon color="#FFFFFF" size={18} style={styles.buttonIcon} />
               <Text style={styles.editButtonText}>Edit</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.deleteButton}
+              style={[styles.deleteButton, { backgroundColor: colors.danger }]}
               onPress={onDelete}
             >
+              <DeleteIcon color="#FFFFFF" size={18} style={styles.buttonIcon} />
               <Text style={styles.deleteButtonText}>Delete</Text>
             </TouchableOpacity>
           </View>
           
           <TouchableOpacity 
-            style={styles.closeButton}
+            style={[styles.closeButton, { backgroundColor: colors.border }]}
             onPress={onClose}
           >
-            <Text style={styles.closeButtonText}>Close</Text>
+            <Text style={[styles.closeButtonText, { color: colors.text }]}>Close</Text>
           </TouchableOpacity>
+          </ScrollView>
         </View>
       </TouchableOpacity>
     </Modal>
@@ -129,17 +192,21 @@ export default function ItemDetailModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
     width: '90%',
     maxWidth: 500,
-    maxHeight: '80%',
+    maxHeight: '90%',
+  },
+  modalScrollView: {
+    width: '100%',
+  },
+  modalScrollContent: {
+    padding: 20,
+    paddingBottom: 30,
   },
   modalTitle: {
     fontSize: 24,
@@ -152,19 +219,20 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 8,
     marginBottom: 16,
+    zIndex: 1,
   },
   noImageContainer: {
-    backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   noImageText: {
-    color: '#888',
     fontSize: 16,
     fontWeight: '500',
   },
   modalDetails: {
+    marginTop: 16,
     marginBottom: 16,
+    zIndex: 2,
   },
   detailRow: {
     flexDirection: 'row',
@@ -183,15 +251,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
+    zIndex: 2,
   },
   editButton: {
-    backgroundColor: '#222',
+    flexDirection: 'row',
     borderRadius: 8,
     paddingHorizontal: 24,
     paddingVertical: 10,
     flex: 1,
     marginRight: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonIcon: {
+    marginRight: 6,
   },
   editButtonText: {
     color: '#fff',
@@ -199,13 +272,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   deleteButton: {
-    backgroundColor: '#f33',
+    flexDirection: 'row',
     borderRadius: 8,
     paddingHorizontal: 24,
     paddingVertical: 10,
     flex: 1,
     marginLeft: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteButtonText: {
     color: '#fff',
@@ -213,7 +287,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   closeButton: {
-    backgroundColor: '#f0f0f0',
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
@@ -221,5 +294,22 @@ const styles = StyleSheet.create({
   closeButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  tagsContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  tagChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  tagChipText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

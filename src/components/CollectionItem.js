@@ -1,6 +1,9 @@
 // src/components/CollectionItem.js
 import React from 'react';
 import { View, TouchableOpacity, Text, Image, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../theme/theme';
+import { EditIcon, DeleteIcon } from './AppIcons';
 
 /**
  * A reusable component for displaying a collection in a list
@@ -21,8 +24,20 @@ export default function CollectionItem({
   onEdit, 
   onDelete 
 }) {
+  const { colors } = useTheme();
+  
   return (
-    <View style={styles.card}>
+    <View style={[
+      styles.card, 
+      { 
+        backgroundColor: colors.card,
+        shadowColor: colors.text,
+      }
+    ]}>
+      <LinearGradient
+        colors={[colors.cardGradientStart, colors.cardGradientEnd]}
+        style={styles.cardGradient}
+      >
       <TouchableOpacity
         style={{ flex: 1 }}
         onPress={onPress}
@@ -35,28 +50,32 @@ export default function CollectionItem({
             style={[
               styles.coverImage,
               styles.noImageContainer,
+              { backgroundColor: colors.border }
             ]}
           >
-            <Text style={styles.noImageText}>No Image</Text>
+            <Text style={[styles.noImageText, { color: colors.textSecondary }]}>No Image</Text>
           </View>
         )}
         <View style={styles.cardTextContainer}>
-          <Text style={styles.cardTitle}>{collection.name}</Text>
-          <Text style={styles.itemCount}>{itemCount} items</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{collection.name}</Text>
+          <Text style={[styles.itemCount, { color: colors.textSecondary }]}>{itemCount} items</Text>
         </View>
       </TouchableOpacity>
+      </LinearGradient>
 
       <View style={styles.buttonsContainer}>
         <TouchableOpacity
-          style={styles.editButton}
+          style={[styles.editButton, { backgroundColor: colors.primary }]}
           onPress={onEdit}
         >
+          <EditIcon color="#FFFFFF" size={16} style={styles.buttonIcon} />
           <Text style={styles.editButtonText}>Edit</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.deleteButton}
+          style={[styles.deleteButton, { backgroundColor: colors.danger }]}
           onPress={onDelete}
         >
+          <DeleteIcon color="#FFFFFF" size={16} style={styles.buttonIcon} />
           <Text style={styles.deleteButtonText}>Delete</Text>
         </TouchableOpacity>
       </View>
@@ -66,28 +85,30 @@ export default function CollectionItem({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    borderRadius: 16,
     marginBottom: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
     paddingBottom: 12,
+  },
+  cardGradient: {
+    flex: 1,
+    width: '100%',
   },
   coverImage: { 
     width: '100%', 
-    height: 160 
+    height: 180,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   noImageContainer: {
-    backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   noImageText: {
-    color: '#888',
     fontSize: 16,
     fontWeight: '500',
   },
@@ -96,14 +117,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12 
   },
   cardTitle: { 
-    fontSize: 20, 
-    fontWeight: '600', 
-    color: '#222' 
+    fontSize: 22, 
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   itemCount: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 15,
     marginTop: 4,
+    fontWeight: '500',
   },
   buttonsContainer: {
     flexDirection: 'row',
@@ -112,24 +133,43 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   editButton: {
-    backgroundColor: '#222',
-    borderRadius: 8,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  buttonIcon: {
+    marginRight: 4,
   },
   editButtonText: {
     color: 'white',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
   deleteButton: {
-    backgroundColor: '#f33',
-    borderRadius: 8,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   deleteButtonText: {
     color: 'white',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
 });

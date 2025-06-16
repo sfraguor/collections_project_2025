@@ -10,20 +10,30 @@ import {
   Image,
   Platform,
   TouchableOpacity,
+  FlatList,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import TagSelector from '../components/TagSelector';
+import ImageGallery from '../components/ImageGallery';
+import FullscreenImageViewer from '../components/FullscreenImageViewer';
+import { useTheme } from '../theme/theme';
+import { CameraIcon, GalleryIcon, DeleteIcon, AddIcon } from '../components/AppIcons';
 
 const EditItemScreen = ({ route, navigation }) => {
+  const { colors } = useTheme();
   const { collectionId, item } = route.params;
 
   const [name, setName] = useState(item.name);
   const [description, setDescription] = useState(item.description || '');
-  const [image, setImage] = useState(item.image || '');
+  const [images, setImages] = useState(item.images || (item.image ? [item.image] : []));
   const [price, setPrice] = useState(item.price || '');
   const [purchaseDate, setPurchaseDate] = useState(item.purchaseDate || '');
   const [condition, setCondition] = useState(item.condition || '');
   const [notes, setNotes] = useState(item.notes || '');
+  const [tags, setTags] = useState(item.tags || []);
+  const [fullscreenVisible, setFullscreenVisible] = useState(false);
+  const [fullscreenIndex, setFullscreenIndex] = useState(0);
 
   // Request permissions for camera and gallery
   const requestPermissions = async () => {
@@ -51,7 +61,7 @@ const EditItemScreen = ({ route, navigation }) => {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImage(result.assets[0].uri);
+      setImages([...images, result.assets[0].uri]);
     }
   };
 
@@ -67,8 +77,21 @@ const EditItemScreen = ({ route, navigation }) => {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImage(result.assets[0].uri);
+      setImages([...images, result.assets[0].uri]);
     }
+  };
+  
+  // Remove an image
+  const removeImage = (index) => {
+    const newImages = [...images];
+    newImages.splice(index, 1);
+    setImages(newImages);
+  };
+  
+  // Open fullscreen image viewer
+  const openFullscreen = (image, index) => {
+    setFullscreenIndex(index);
+    setFullscreenVisible(true);
   };
 
   const saveItem = async () => {
@@ -84,11 +107,14 @@ const EditItemScreen = ({ route, navigation }) => {
           ...i, 
           name, 
           description, 
-          image,
+          images,
+          // Keep image field for backward compatibility
+          image: images.length > 0 ? images[0] : '',
           price,
           purchaseDate,
           condition,
           notes,
+          tags,
           updatedAt: new Date().toISOString()
         } : i
       );
@@ -100,72 +126,162 @@ const EditItemScreen = ({ route, navigation }) => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.label}>Name*</Text>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.label, { color: colors.text }]}>Name*</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { 
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          color: colors.text
+        }]}
         value={name}
         onChangeText={setName}
         placeholder="Item Name"
+        placeholderTextColor={colors.placeholder}
       />
 
-      <Text style={styles.label}>Description</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Description</Text>
       <TextInput
-        style={[styles.input, { height: 100 }]}
+        style={[styles.input, { 
+          height: 100,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          color: colors.text
+        }]}
         multiline
         value={description}
         onChangeText={setDescription}
         placeholder="Description"
+        placeholderTextColor={colors.placeholder}
       />
 
-      <Text style={styles.label}>Image</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Images</Text>
       <View style={styles.imageButtons}>
-        <Button title="Take Photo" onPress={takePhoto} />
-        <Button title="Pick Image" onPress={pickImage} />
+        <TouchableOpacity 
+          style={[styles.imageButton, { backgroundColor: colors.primary }]} 
+          onPress={takePhoto}
+        >
+          <CameraIcon color="#FFFFFF" size={18} style={styles.buttonIcon} />
+          <Text style={styles.buttonText}>Take Photo</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.imageButton, { backgroundColor: colors.secondary }]} 
+          onPress={pickImage}
+        >
+          <GalleryIcon color="#FFFFFF" size={18} style={styles.buttonIcon} />
+          <Text style={styles.buttonText}>Pick Image</Text>
+        </TouchableOpacity>
       </View>
-      {image ? (
-        <Image source={{ uri: image }} style={styles.imagePreview} />
+      
+      {images.length > 0 ? (
+        <View style={styles.imagesContainer}>
+          <ImageGallery 
+            images={images} 
+            height={200} 
+            showThumbnails={true}
+            allowFullscreen={true}
+            onImagePress={openFullscreen}
+          />
+          
+          <View style={styles.imagesListContainer}>
+            <Text style={[styles.imagesListTitle, { color: colors.text }]}>
+              All Images ({images.length})
+            </Text>
+            {/* Grid of images without using FlatList to avoid nesting VirtualizedLists */}
+            <View style={styles.imageGrid}>
+              {images.map((image, index) => (
+                <View key={index} style={styles.imageListItem}>
+                  <Image source={{ uri: image }} style={styles.imageListThumb} />
+                  <TouchableOpacity
+                    style={[styles.removeImageButton, { backgroundColor: colors.danger }]}
+                    onPress={() => removeImage(index)}
+                  >
+                    <DeleteIcon color="#FFFFFF" size={12} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
       ) : (
-        <View style={styles.imagePlaceholder}>
-          <Text style={styles.placeholderText}>No Image Selected</Text>
+        <View style={[styles.imagePlaceholder, { backgroundColor: colors.border }]}>
+          <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
+            No Images Selected
+          </Text>
+          <Text style={[styles.placeholderSubtext, { color: colors.textSecondary }]}>
+            Add multiple images from different perspectives
+          </Text>
         </View>
       )}
+      
+      <FullscreenImageViewer
+        images={images}
+        initialIndex={fullscreenIndex}
+        visible={fullscreenVisible}
+        onClose={() => setFullscreenVisible(false)}
+      />
+      
+      <TagSelector selectedTags={tags} onTagsChange={setTags} />
 
-      <Text style={styles.label}>Price</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Price</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { 
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          color: colors.text
+        }]}
         value={price}
         onChangeText={setPrice}
         placeholder="Enter price"
+        placeholderTextColor={colors.placeholder}
         keyboardType="numeric"
       />
 
-      <Text style={styles.label}>Purchase Date</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Purchase Date</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { 
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          color: colors.text
+        }]}
         value={purchaseDate}
         onChangeText={setPurchaseDate}
         placeholder="YYYY-MM-DD"
+        placeholderTextColor={colors.placeholder}
       />
 
-      <Text style={styles.label}>Condition</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Condition</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { 
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          color: colors.text
+        }]}
         value={condition}
         onChangeText={setCondition}
         placeholder="New, Used, Mint, etc."
+        placeholderTextColor={colors.placeholder}
       />
 
-      <Text style={styles.label}>Additional Notes</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Additional Notes</Text>
       <TextInput
-        style={[styles.input, { height: 100 }]}
+        style={[styles.input, { 
+          height: 100,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          color: colors.text
+        }]}
         multiline
         value={notes}
         onChangeText={setNotes}
         placeholder="Any additional notes"
+        placeholderTextColor={colors.placeholder}
       />
 
-      <TouchableOpacity style={styles.saveButton} onPress={saveItem}>
+      <TouchableOpacity 
+        style={[styles.saveButton, { backgroundColor: colors.primary }]} 
+        onPress={saveItem}
+      >
         <Text style={styles.saveButtonText}>Save Changes</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -176,7 +292,6 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     paddingBottom: 40,
-    backgroundColor: '#fff',
     flexGrow: 1,
   },
   label: {
@@ -199,10 +314,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     marginVertical: 10,
   },
-  imagePreview: {
-    width: '100%',
-    height: 200,
+  imageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 8,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  imagesContainer: {
     marginVertical: 10,
   },
   imagePlaceholder: {
@@ -217,9 +344,50 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: '#888',
     fontSize: 16,
+    marginBottom: 4,
+  },
+  placeholderSubtext: {
+    color: '#888',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  imagesListContainer: {
+    marginTop: 16,
+  },
+  imagesListTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  imageGrid: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  imageListItem: {
+    width: '31%',
+    aspectRatio: 1,
+    margin: '1%',
+    borderRadius: 4,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  imageListThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   saveButton: {
-    backgroundColor: '#222',
     borderRadius: 8,
     paddingVertical: 12,
     marginTop: 20,
