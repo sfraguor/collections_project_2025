@@ -40,6 +40,27 @@ export const StatsIcon = ({ size = 24, color, style }) => {
   return <Ionicons name="stats-chart" size={size} color={color || colors.text} style={style} />;
 };
 
+// Cloud sync icons
+export const CloudIcon = ({ size = 24, color, style }) => {
+  const { colors } = useTheme();
+  return <MaterialIcons name="cloud" size={size} color={color || colors.text} style={style} />;
+};
+
+export const SyncIcon = ({ size = 24, color, style }) => {
+  const { colors } = useTheme();
+  return <MaterialIcons name="sync" size={size} color={color || colors.text} style={style} />;
+};
+
+export const WifiIcon = ({ size = 24, color, style }) => {
+  const { colors } = useTheme();
+  return <MaterialIcons name="wifi" size={size} color={color || colors.text} style={style} />;
+};
+
+export const ClockIcon = ({ size = 24, color, style }) => {
+  const { colors } = useTheme();
+  return <MaterialIcons name="access-time" size={size} color={color || colors.text} style={style} />;
+};
+
 // Collection and item management icons
 export const EditIcon = ({ size = 24, color, style }) => {
   const { colors } = useTheme();
@@ -100,6 +121,11 @@ export const InfoIcon = ({ size = 24, color, style }) => {
 export const SettingsIcon = ({ size = 24, color, style }) => {
   const { colors } = useTheme();
   return <Ionicons name="settings" size={size} color={color || colors.text} style={style} />;
+};
+
+export const ProfileIcon = ({ size = 24, color, style }) => {
+  const { colors } = useTheme();
+  return <MaterialIcons name="person" size={size} color={color || colors.text} style={style} />;
 };
 
 // Theme icons

@@ -18,10 +18,15 @@ import TagSelector from '../components/TagSelector';
 import ImageGallery from '../components/ImageGallery';
 import FullscreenImageViewer from '../components/FullscreenImageViewer';
 import { useTheme } from '../theme/theme';
+import { useAuth } from '../context/AuthContext';
 import { CameraIcon, GalleryIcon, DeleteIcon, AddIcon } from '../components/AppIcons';
+
+// Helper function to get item storage key with user ID
+const getItemStorageKey = (userId, collectionId) => `${userId || 'guest'}_${collectionId}`;
 
 const EditItemScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const { collectionId, item } = route.params;
 
   const [name, setName] = useState(item.name);
@@ -100,7 +105,8 @@ const EditItemScreen = ({ route, navigation }) => {
       return;
     }
     try {
-      const existing = await AsyncStorage.getItem(collectionId);
+      const itemStorageKey = getItemStorageKey(user?.id, collectionId);
+      const existing = await AsyncStorage.getItem(itemStorageKey);
       const items = existing ? JSON.parse(existing) : [];
       const updatedItems = items.map((i) =>
         i.id === item.id ? { 
@@ -115,10 +121,11 @@ const EditItemScreen = ({ route, navigation }) => {
           condition,
           notes,
           tags,
+          userId: user?.id || 'guest',
           updatedAt: new Date().toISOString()
         } : i
       );
-      await AsyncStorage.setItem(collectionId, JSON.stringify(updatedItems));
+      await AsyncStorage.setItem(itemStorageKey, JSON.stringify(updatedItems));
       navigation.goBack();
     } catch (e) {
       Alert.alert('Error', 'Failed to save item');

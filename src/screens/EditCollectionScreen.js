@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, Image, Platform, ScrollView, KeyboardAvoidingView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from '../context/AuthContext';
 
-const STORAGE_KEY = 'collections';
+// Storage key with user ID to separate data by user
+const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
 
 const EditCollectionScreen = ({ route, navigation }) => {
+  const { user } = useAuth();
   const { collectionId } = route.params;
   const [name, setName] = useState('');
   const [cover, setCover] = useState(null);
@@ -14,7 +17,8 @@ const EditCollectionScreen = ({ route, navigation }) => {
     // Cargar la colección para editar
     const loadCollection = async () => {
       try {
-        const json = await AsyncStorage.getItem(STORAGE_KEY);
+        const storageKey = getStorageKey(user?.id);
+        const json = await AsyncStorage.getItem(storageKey);
         if (json) {
           const collections = JSON.parse(json);
           const collection = collections.find(c => c.id === collectionId);
@@ -28,7 +32,7 @@ const EditCollectionScreen = ({ route, navigation }) => {
       }
     };
     loadCollection();
-  }, [collectionId]);
+  }, [collectionId, user?.id]);
 
   // Reutilizamos funciones para permisos y selección de imagen (como en AddCollectionScreen)
   const requestPermissions = async () => {
@@ -81,7 +85,8 @@ const EditCollectionScreen = ({ route, navigation }) => {
     }
 
     try {
-      const json = await AsyncStorage.getItem(STORAGE_KEY);
+      const storageKey = getStorageKey(user?.id);
+      const json = await AsyncStorage.getItem(storageKey);
       let collections = json ? JSON.parse(json) : [];
 
       // Validar que no haya otro con el mismo nombre (excluyendo el que editamos)
@@ -93,12 +98,17 @@ const EditCollectionScreen = ({ route, navigation }) => {
       // Actualizar la colección editada
       collections = collections.map(c => {
         if (c.id === collectionId) {
-          return { ...c, name: name.trim(), cover: cover || null };
+          return { 
+            ...c, 
+            name: name.trim(), 
+            cover: cover || null,
+            updatedAt: new Date().toISOString()
+          };
         }
         return c;
       });
 
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(collections));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(collections));
       navigation.goBack();
     } catch (e) {
       Alert.alert('Error', 'Failed to save collection');

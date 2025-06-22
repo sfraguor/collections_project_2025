@@ -3,6 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/theme';
+import { useAuth } from '../context/AuthContext';
+
+// Storage key with user ID to separate data by user
+const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
+
+// Helper function to get item storage key with user ID
+const getItemStorageKey = (userId, collectionId) => `${userId || 'guest'}_${collectionId}`;
 
 /**
  * A component that displays statistics about the user's collections
@@ -11,6 +18,7 @@ import { useTheme } from '../theme/theme';
  */
 export default function CollectionStats({ visible = true }) {
   const { colors, styles: themeStyles } = useTheme();
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     totalCollections: 0,
     totalItems: 0,
@@ -31,7 +39,8 @@ export default function CollectionStats({ visible = true }) {
     setLoading(true);
     try {
       // Load all collections
-      const collectionsJson = await AsyncStorage.getItem('collections');
+      const storageKey = getStorageKey(user?.id);
+      const collectionsJson = await AsyncStorage.getItem(storageKey);
       const collections = collectionsJson ? JSON.parse(collectionsJson) : [];
       
       if (collections.length === 0) {
@@ -56,7 +65,8 @@ export default function CollectionStats({ visible = true }) {
       // Process each collection
       for (const collection of collections) {
         // Get items in this collection
-        const itemsJson = await AsyncStorage.getItem(collection.id);
+        const itemStorageKey = getItemStorageKey(user?.id, collection.id);
+        const itemsJson = await AsyncStorage.getItem(itemStorageKey);
         const items = itemsJson ? JSON.parse(itemsJson) : [];
         
         // Update total items

@@ -12,6 +12,13 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/theme';
+import { useAuth } from '../context/AuthContext';
+
+// Storage key with user ID to separate data by user
+const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
+
+// Helper function to get item storage key with user ID
+const getItemStorageKey = (userId, collectionId) => `${userId || 'guest'}_${collectionId}`;
 import {
   exportAllData,
   exportCollection,
@@ -21,6 +28,7 @@ import {
 
 const DataExportScreen = ({ navigation }) => {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -39,14 +47,16 @@ const DataExportScreen = ({ navigation }) => {
     setLoading(true);
     try {
       // Load collections
-      const collectionsJson = await AsyncStorage.getItem('collections');
+      const storageKey = getStorageKey(user?.id);
+      const collectionsJson = await AsyncStorage.getItem(storageKey);
       const collectionsData = collectionsJson ? JSON.parse(collectionsJson) : [];
       setCollections(collectionsData);
 
       // Calculate stats
       let totalItems = 0;
       for (const collection of collectionsData) {
-        const itemsJson = await AsyncStorage.getItem(collection.id);
+        const itemStorageKey = getItemStorageKey(user?.id, collection.id);
+        const itemsJson = await AsyncStorage.getItem(itemStorageKey);
         const items = itemsJson ? JSON.parse(itemsJson) : [];
         totalItems += items.length;
       }
@@ -66,7 +76,7 @@ const DataExportScreen = ({ navigation }) => {
   const handleExportAll = async () => {
     setExporting(true);
     try {
-      const fileUri = await exportAllData();
+      const fileUri = await exportAllData(user?.id);
       await shareExportedFile(fileUri);
     } catch (error) {
       console.error('Error exporting all data:', error);
@@ -79,7 +89,7 @@ const DataExportScreen = ({ navigation }) => {
   const handleExportCollection = async (collectionId, collectionName) => {
     setExporting(true);
     try {
-      const fileUri = await exportCollection(collectionId, collectionName);
+      const fileUri = await exportCollection(collectionId, collectionName, user?.id);
       await shareExportedFile(fileUri);
     } catch (error) {
       console.error('Error exporting collection:', error);
@@ -92,7 +102,7 @@ const DataExportScreen = ({ navigation }) => {
   const handleImport = async () => {
     setImporting(true);
     try {
-      const result = await importData(mergeData);
+      const result = await importData(mergeData, user?.id);
       
       if (result.success) {
         Alert.alert('Success', result.message);

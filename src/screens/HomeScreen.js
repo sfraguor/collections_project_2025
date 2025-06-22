@@ -17,18 +17,23 @@ import SortModal from '../components/SortModal';
 import ThemeToggle from '../components/ThemeToggle';
 import CollectionStats from '../components/CollectionStats';
 import { useTheme } from '../theme/theme';
+import { useAuth } from '../context/AuthContext';
 import { 
   AddIcon, 
   SortIcon, 
   SearchIcon, 
   BackupIcon, 
-  StatsIcon 
+  StatsIcon,
+  ProfileIcon,
+  CloudIcon
 } from '../components/AppIcons';
 
-const STORAGE_KEY = 'collections';
+// Storage key with user ID to separate data by user
+const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
 
 const HomeScreen = ({ navigation }) => {
   const { theme, colors, styles: themeStyles } = useTheme();
+  const { user } = useAuth();
   const [collections, setCollections] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
@@ -42,7 +47,8 @@ const HomeScreen = ({ navigation }) => {
     const loadCollections = async () => {
       setLoading(true);
       try {
-        const json = await AsyncStorage.getItem(STORAGE_KEY);
+        const storageKey = getStorageKey(user?.id);
+        const json = await AsyncStorage.getItem(storageKey);
         setCollections(json ? JSON.parse(json) : []);
         
         // Load item counts for each collection
@@ -50,7 +56,9 @@ const HomeScreen = ({ navigation }) => {
         const collectionList = json ? JSON.parse(json) : [];
         
         for (const collection of collectionList) {
-          const itemsJson = await AsyncStorage.getItem(collection.id);
+          // Include user ID in item storage key
+          const itemStorageKey = `${user?.id || 'guest'}_${collection.id}`;
+          const itemsJson = await AsyncStorage.getItem(itemStorageKey);
           const items = itemsJson ? JSON.parse(itemsJson) : [];
           itemCounts[collection.id] = items.length;
         }
@@ -66,7 +74,7 @@ const HomeScreen = ({ navigation }) => {
     const unsubscribe = navigation.addListener('focus', loadCollections);
     loadCollections();
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, user?.id]);
   
   // Filter collections based on search query
   const filteredCollections = collections.filter(collection => 
@@ -105,10 +113,12 @@ const HomeScreen = ({ navigation }) => {
             try {
               // Eliminar colección de la lista
               const filtered = collections.filter((c) => c.id !== id);
-              await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+              const storageKey = getStorageKey(user?.id);
+              await AsyncStorage.setItem(storageKey, JSON.stringify(filtered));
               
               // También elimina los items guardados bajo la key con id de colección
-              await AsyncStorage.removeItem(id);
+              const itemStorageKey = `${user?.id || 'guest'}_${id}`;
+              await AsyncStorage.removeItem(itemStorageKey);
 
               setCollections(filtered);
             } catch (e) {
@@ -157,36 +167,63 @@ const HomeScreen = ({ navigation }) => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar
         barStyle={theme === 'dark' ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
+        backgroundColor={colors.primary}
       />
-      <LinearGradient
-        colors={[colors.primary, colors.primaryLight]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.headerGradient}
-      >
-        <Text style={styles.header}>My Collections</Text>
-      </LinearGradient>
       
-      <View style={styles.headerButtons}>
-        <ThemeToggle />
-        <View style={styles.rightButtons}>
+      {/* New Header Design */}
+      <View style={styles.headerContainer}>
+        <LinearGradient
+          colors={[colors.primary, colors.primaryDark || colors.primary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerContent}>
+            <Text style={styles.header}>My Collections</Text>
+            
+            {/* User profile button moved to header */}
+            <TouchableOpacity 
+              style={styles.profileButton}
+              onPress={() => navigation.navigate('Profile')}
+            >
+              <ProfileIcon color="#FFFFFF" size={24} />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </View>
+      
+      {/* Action buttons in a more accessible layout */}
+      <View style={styles.actionButtonsContainer}>
+        <View style={styles.actionButtonsRow}>
           <TouchableOpacity 
-            style={[styles.headerButton, { backgroundColor: colors.secondary }]}
+            style={[styles.actionButton, { backgroundColor: colors.secondary }]}
             onPress={() => setShowStats(!showStats)}
           >
-            <StatsIcon color="#FFFFFF" size={18} />
-            <Text style={styles.headerButtonText}>
+            <StatsIcon color="#FFFFFF" size={20} />
+            <Text style={styles.actionButtonText}>
               {showStats ? 'Hide Stats' : 'Show Stats'}
             </Text>
           </TouchableOpacity>
+          
           <TouchableOpacity 
-            style={[styles.headerButton, { backgroundColor: colors.primary }]}
+            style={[styles.actionButton, { backgroundColor: colors.primary }]}
             onPress={() => navigation.navigate('DataExport')}
           >
-            <BackupIcon color="#FFFFFF" size={18} />
-            <Text style={styles.headerButtonText}>Backup</Text>
+            <BackupIcon color="#FFFFFF" size={20} />
+            <Text style={styles.actionButtonText}>Backup</Text>
           </TouchableOpacity>
+        </View>
+        
+        <View style={styles.actionButtonsRow}>
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: colors.accent }]}
+            onPress={() => navigation.navigate('CloudSync')}
+          >
+            <CloudIcon color="#FFFFFF" size={20} />
+            <Text style={styles.actionButtonText}>Cloud Sync</Text>
+          </TouchableOpacity>
+          
+          <ThemeToggle containerStyle={styles.themeToggleContainer} />
         </View>
       </View>
       
@@ -255,60 +292,83 @@ const HomeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    paddingHorizontal: 16, 
+    paddingHorizontal: 0, // Removed horizontal padding for full-width header
     paddingTop: 0 
   },
+  headerContainer: {
+    width: '100%',
+    marginBottom: 16,
+  },
   headerGradient: {
-    paddingVertical: 30,
-    paddingTop: 40,
-    marginHorizontal: -16,
-    marginBottom: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    paddingTop: 50, // More space at the top for status bar
+    paddingBottom: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 10,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   header: { 
     fontSize: 28, 
     fontWeight: '800', 
-    textAlign: 'center',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+    // Removed text-align center to align with left edge
   },
-  headerButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  profileButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionButtonsContainer: {
+    paddingHorizontal: 16,
     marginBottom: 16,
   },
-  rightButtons: {
+  actionButtonsRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  headerButton: {
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    marginLeft: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flex: 1,
+    marginHorizontal: 4,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  headerButtonText: {
+  actionButtonText: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 14,
     letterSpacing: 0.3,
-    marginLeft: 4,
+    marginLeft: 6,
+  },
+  themeToggleContainer: {
+    flex: 0.7,
+    marginHorizontal: 4,
   },
   searchContainer: {
     flexDirection: 'row',
     marginBottom: 16,
+    paddingHorizontal: 16,
   },
   searchInputContainer: {
     flex: 1,
@@ -354,7 +414,7 @@ const styles = StyleSheet.create({
     bottom: 32,
     left: 20,
     right: 20,
-    borderRadius: 16,
+    borderRadius: 24,
     paddingVertical: 16,
     flexDirection: 'row',
     justifyContent: 'center',

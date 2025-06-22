@@ -5,15 +5,22 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { Alert } from 'react-native';
 
+// Storage key with user ID to separate data by user
+const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
+
+// Helper function to get item storage key with user ID
+const getItemStorageKey = (userId, collectionId) => `${userId || 'guest'}_${collectionId}`;
+
 /**
  * Utility functions for exporting and importing app data
  */
 
 /**
  * Export all app data to a JSON file
+ * @param {string} userId - The user ID
  * @returns {Promise<string>} The URI of the exported file
  */
-export const exportAllData = async () => {
+export const exportAllData = async (userId) => {
   try {
     // Get all keys from AsyncStorage
     const keys = await AsyncStorage.getAllKeys();
@@ -26,7 +33,7 @@ export const exportAllData = async () => {
     );
     
     // Get all collections data
-    const collectionsKey = 'collections';
+    const collectionsKey = getStorageKey(userId);
     const collectionsData = await AsyncStorage.getItem(collectionsKey);
     const collections = collectionsData ? JSON.parse(collectionsData) : [];
     
@@ -34,7 +41,8 @@ export const exportAllData = async () => {
     const itemsData = {};
     for (const collection of collections) {
       const collectionId = collection.id;
-      const itemsJson = await AsyncStorage.getItem(collectionId);
+      const itemStorageKey = getItemStorageKey(userId, collectionId);
+      const itemsJson = await AsyncStorage.getItem(itemStorageKey);
       itemsData[collectionId] = itemsJson ? JSON.parse(itemsJson) : [];
     }
     
@@ -99,12 +107,14 @@ export const shareExportedFile = async (fileUri) => {
  * Export a single collection to a JSON file
  * @param {string} collectionId - The ID of the collection to export
  * @param {string} collectionName - The name of the collection
+ * @param {string} userId - The user ID
  * @returns {Promise<string>} The URI of the exported file
  */
-export const exportCollection = async (collectionId, collectionName) => {
+export const exportCollection = async (collectionId, collectionName, userId) => {
   try {
     // Get collection data
-    const itemsJson = await AsyncStorage.getItem(collectionId);
+    const itemStorageKey = getItemStorageKey(userId, collectionId);
+    const itemsJson = await AsyncStorage.getItem(itemStorageKey);
     const items = itemsJson ? JSON.parse(itemsJson) : [];
     
     // Create export object
@@ -142,9 +152,10 @@ export const exportCollection = async (collectionId, collectionName) => {
 /**
  * Import data from a JSON file
  * @param {boolean} mergeData - Whether to merge with existing data or replace it
+ * @param {string} userId - The user ID
  * @returns {Promise<Object>} Import results
  */
-export const importData = async (mergeData = false) => {
+export const importData = async (mergeData = false, userId) => {
   try {
     // Pick a document
     const result = await DocumentPicker.getDocumentAsync({
@@ -176,10 +187,10 @@ export const importData = async (mergeData = false) => {
     // Check if it's a full backup or a single collection
     if (importData.collections && importData.items) {
       // Full backup
-      return await importFullBackup(importData, mergeData);
+      return await importFullBackup(importData, mergeData, userId);
     } else if (importData.collection && importData.items) {
       // Single collection
-      return await importSingleCollection(importData, mergeData);
+      return await importSingleCollection(importData, mergeData, userId);
     } else {
       return { 
         success: false, 
@@ -199,15 +210,17 @@ export const importData = async (mergeData = false) => {
  * Import a full backup
  * @param {Object} importData - The data to import
  * @param {boolean} mergeData - Whether to merge with existing data
+ * @param {string} userId - The user ID
  * @returns {Promise<Object>} Import results
  */
-const importFullBackup = async (importData, mergeData) => {
+const importFullBackup = async (importData, mergeData, userId) => {
   try {
     if (mergeData) {
       // Merge with existing data
       
       // Get existing collections
-      const collectionsJson = await AsyncStorage.getItem('collections');
+      const storageKey = getStorageKey(userId);
+      const collectionsJson = await AsyncStorage.getItem(storageKey);
       const existingCollections = collectionsJson ? JSON.parse(collectionsJson) : [];
       
       // Create a map of existing collections by ID
@@ -226,14 +239,15 @@ const importFullBackup = async (importData, mergeData) => {
       });
       
       // Save merged collections
-      await AsyncStorage.setItem('collections', JSON.stringify(newCollections));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(newCollections));
       
       // Merge items for each collection
       for (const collectionId in importData.items) {
         const importedItems = importData.items[collectionId];
         
         // Get existing items
-        const existingItemsJson = await AsyncStorage.getItem(collectionId);
+        const itemStorageKey = getItemStorageKey(userId, collectionId);
+        const existingItemsJson = await AsyncStorage.getItem(itemStorageKey);
         const existingItems = existingItemsJson ? JSON.parse(existingItemsJson) : [];
         
         // Create a map of existing items by ID
@@ -252,7 +266,7 @@ const importFullBackup = async (importData, mergeData) => {
         });
         
         // Save merged items
-        await AsyncStorage.setItem(collectionId, JSON.stringify(newItems));
+        await AsyncStorage.setItem(itemStorageKey, JSON.stringify(newItems));
       }
       
       // Merge tags
@@ -285,11 +299,13 @@ const importFullBackup = async (importData, mergeData) => {
       // Replace existing data
       
       // Save collections
-      await AsyncStorage.setItem('collections', JSON.stringify(importData.collections));
+      const storageKey = getStorageKey(userId);
+      await AsyncStorage.setItem(storageKey, JSON.stringify(importData.collections));
       
       // Save items for each collection
       for (const collectionId in importData.items) {
-        await AsyncStorage.setItem(collectionId, JSON.stringify(importData.items[collectionId]));
+        const itemStorageKey = getItemStorageKey(userId, collectionId);
+        await AsyncStorage.setItem(itemStorageKey, JSON.stringify(importData.items[collectionId]));
       }
       
       // Save tags
@@ -320,14 +336,16 @@ const importFullBackup = async (importData, mergeData) => {
  * Import a single collection
  * @param {Object} importData - The data to import
  * @param {boolean} mergeData - Whether to merge with existing data
+ * @param {string} userId - The user ID
  * @returns {Promise<Object>} Import results
  */
-const importSingleCollection = async (importData, mergeData) => {
+const importSingleCollection = async (importData, mergeData, userId) => {
   try {
     const { collection, items } = importData;
     
     // Get existing collections
-    const collectionsJson = await AsyncStorage.getItem('collections');
+    const storageKey = getStorageKey(userId);
+    const collectionsJson = await AsyncStorage.getItem(storageKey);
     const existingCollections = collectionsJson ? JSON.parse(collectionsJson) : [];
     
     // Check if collection already exists
@@ -337,7 +355,8 @@ const importSingleCollection = async (importData, mergeData) => {
       // Collection exists
       if (!mergeData) {
         // Replace items
-        await AsyncStorage.setItem(collection.id, JSON.stringify(items));
+        const itemStorageKey = getItemStorageKey(userId, collection.id);
+        await AsyncStorage.setItem(itemStorageKey, JSON.stringify(items));
         
         return { 
           success: true, 
@@ -348,7 +367,8 @@ const importSingleCollection = async (importData, mergeData) => {
         };
       } else {
         // Merge items
-        const existingItemsJson = await AsyncStorage.getItem(collection.id);
+        const itemStorageKey = getItemStorageKey(userId, collection.id);
+        const existingItemsJson = await AsyncStorage.getItem(itemStorageKey);
         const existingItems = existingItemsJson ? JSON.parse(existingItemsJson) : [];
         
         // Create a map of existing items by ID
@@ -367,7 +387,7 @@ const importSingleCollection = async (importData, mergeData) => {
         });
         
         // Save merged items
-        await AsyncStorage.setItem(collection.id, JSON.stringify(newItems));
+        await AsyncStorage.setItem(itemStorageKey, JSON.stringify(newItems));
         
         return { 
           success: true, 
@@ -381,10 +401,11 @@ const importSingleCollection = async (importData, mergeData) => {
     } else {
       // Collection doesn't exist, add it
       existingCollections.push(collection);
-      await AsyncStorage.setItem('collections', JSON.stringify(existingCollections));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(existingCollections));
       
       // Save items
-      await AsyncStorage.setItem(collection.id, JSON.stringify(items));
+      const itemStorageKey = getItemStorageKey(userId, collection.id);
+      await AsyncStorage.setItem(itemStorageKey, JSON.stringify(items));
       
       return { 
         success: true, 

@@ -18,6 +18,7 @@ import ItemDetailModal from '../components/ItemDetailModal';
 import SortModal from '../components/SortModal';
 import ShareCollectionModal from '../components/ShareCollectionModal';
 import { useTheme } from '../theme/theme';
+import { useAuth } from '../context/AuthContext';
 import { 
   AddIcon, 
   SortIcon, 
@@ -28,8 +29,12 @@ import {
   ClearIcon
 } from '../components/AppIcons';
 
+// Helper function to get item storage key with user ID
+const getItemStorageKey = (userId, collectionId) => `${userId || 'guest'}_${collectionId}`;
+
 const CollectionScreen = ({ route, navigation }) => {
   const { theme, colors } = useTheme();
+  const { user } = useAuth();
   const { collectionId } = route.params;
   const [items, setItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,7 +53,8 @@ const CollectionScreen = ({ route, navigation }) => {
     const loadItems = async () => {
       setLoading(true);
       try {
-        const data = await AsyncStorage.getItem(collectionId);
+        const itemStorageKey = getItemStorageKey(user?.id, collectionId);
+        const data = await AsyncStorage.getItem(itemStorageKey);
         const itemsData = data ? JSON.parse(data) : [];
         setItems(itemsData);
         
@@ -70,7 +76,7 @@ const CollectionScreen = ({ route, navigation }) => {
     const unsubscribe = navigation.addListener('focus', loadItems);
     loadItems();
     return unsubscribe;
-  }, [navigation, collectionId]);
+  }, [navigation, collectionId, user?.id]);
 
   // Filter items based on search query and selected tags
   const filteredItems = items.filter(item => {
@@ -115,7 +121,8 @@ const CollectionScreen = ({ route, navigation }) => {
   const deleteItem = async (id) => {
     const filtered = items.filter((i) => i.id !== id);
     setItems(filtered);
-    await AsyncStorage.setItem(collectionId, JSON.stringify(filtered));
+    const itemStorageKey = getItemStorageKey(user?.id, collectionId);
+    await AsyncStorage.setItem(itemStorageKey, JSON.stringify(filtered));
   };
 
   const confirmDelete = (id) => {

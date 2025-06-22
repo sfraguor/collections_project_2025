@@ -3,10 +3,13 @@ import { View, Text, TextInput, Button, StyleSheet, Alert, Image, Platform, Scro
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import uuid from 'react-native-uuid';
+import { useAuth } from '../context/AuthContext';
 
-const STORAGE_KEY = 'collections';
+// Storage key with user ID to separate data by user
+const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
 
 const AddCollectionScreen = ({ navigation }) => {
+  const { user } = useAuth();
   const [name, setName] = useState('');
   const [cover, setCover] = useState(null); // aquí guardaremos la URI local de la imagen
 
@@ -57,35 +60,39 @@ const AddCollectionScreen = ({ navigation }) => {
   };
 
   const saveCollection = async () => {
-  if (!name.trim()) {
-    Alert.alert('Validation', 'Please enter a collection name');
-    return;
-  }
-  try {
-    const json = await AsyncStorage.getItem(STORAGE_KEY);
-    let collections = json ? JSON.parse(json) : [];
-
-    collections = collections.filter(c => typeof c.name === 'string');
-
-    if (collections.some((c) => c.name.toLowerCase() === name.trim().toLowerCase())) {
-      Alert.alert('Validation', 'A collection with this name already exists.');
+    if (!name.trim()) {
+      Alert.alert('Validation', 'Please enter a collection name');
       return;
     }
+    try {
+      const storageKey = getStorageKey(user?.id);
+      const json = await AsyncStorage.getItem(storageKey);
+      let collections = json ? JSON.parse(json) : [];
 
-    const newCollection = {
+      collections = collections.filter(c => typeof c.name === 'string');
+
+      if (collections.some((c) => c.name.toLowerCase() === name.trim().toLowerCase())) {
+        Alert.alert('Validation', 'A collection with this name already exists.');
+        return;
+      }
+
+      const newCollection = {
         id: uuid.v4(),
         name: name.trim(),
         cover: cover || null,
-    };
-    collections.push(newCollection);
+        userId: user?.id || 'guest',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      collections.push(newCollection);
 
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(collections));
-    navigation.goBack();
-  } catch (e) {
-    console.error('Error saving collection:', e);
-    Alert.alert('Error', 'Failed to save collection: ' + e.message);
-  }
-};
+      await AsyncStorage.setItem(storageKey, JSON.stringify(collections));
+      navigation.goBack();
+    } catch (e) {
+      console.error('Error saving collection:', e);
+      Alert.alert('Error', 'Failed to save collection: ' + e.message);
+    }
+  };
 
 
   return (

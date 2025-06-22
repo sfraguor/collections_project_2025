@@ -6,14 +6,16 @@ import { useTheme } from '../theme/theme';
 
 /**
  * A component for toggling between light and dark themes
+ * @param {Object} props - Component props
+ * @param {Object} props.containerStyle - Additional styles for the container
  */
-export default function ThemeToggle() {
+export default function ThemeToggle({ containerStyle }) {
   const { theme, colors, toggleTheme } = useTheme();
   
   return (
     <LinearGradient
       colors={[colors.cardGradientStart, colors.cardGradientEnd]}
-      style={styles.gradientContainer}
+      style={[styles.gradientContainer, containerStyle]}
     >
       <View style={[styles.container, { borderColor: colors.border }]}>
         <Text style={[styles.text, { color: colors.text }]}>
@@ -34,7 +36,6 @@ export default function ThemeToggle() {
 const styles = StyleSheet.create({
   gradientContainer: {
     borderRadius: 16,
-    marginBottom: 16,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 8,

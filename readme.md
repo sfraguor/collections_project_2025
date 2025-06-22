@@ -18,6 +18,8 @@ Esta aplicación permite gestionar tus colecciones personales (cartas, figuras, 
 - **Tema Claro/Oscuro**: Cambia entre tema claro y oscuro según tus preferencias
 - **Backup y Restauración**: Exporta e importa tus colecciones completas o individuales
 - **Compartir Colecciones**: Comparte tus colecciones con otros usuarios mediante enlaces o archivos
+- **Sincronización en la Nube**: Sincroniza tus colecciones entre múltiples dispositivos usando Supabase
+- **Autenticación de Usuarios**: Registra una cuenta para acceder a tus colecciones desde cualquier dispositivo
 
 ---
 
@@ -30,7 +32,8 @@ Esta aplicación permite gestionar tus colecciones personales (cartas, figuras, 
 - Expo File System y Document Picker para exportación/importación de datos
 - Expo Sharing para compartir archivos de backup
 - Componentes modales para vistas detalladas y opciones de ordenación
-- Context API para gestión de temas
+- Context API para gestión de temas y autenticación
+- Supabase para backend, autenticación y almacenamiento en la nube
 
 ---
 
@@ -68,6 +71,9 @@ npm start
   - `EditCollectionScreen.js`: Formulario para editar colecciones
   - `AddItemScreen.js`: Formulario para añadir items
   - `EditItemScreen.js`: Formulario para editar items
+  - `CloudSyncScreen.js`: Configuración de sincronización en la nube
+  - `DataExportScreen.js`: Exportación e importación de datos
+  - `/auth`: Pantallas de autenticación (login, registro, perfil)
 - `/src/components`: Componentes reutilizables
   - `CollectionItem.js`: Componente para mostrar una colección
   - `ItemCard.js`: Componente para mostrar un item
@@ -76,17 +82,60 @@ npm start
   - `TagSelector.js`: Componente para seleccionar etiquetas
   - `CollectionStats.js`: Componente para mostrar estadísticas
   - `ThemeToggle.js`: Componente para cambiar el tema
+  - `AppIcons.js`: Iconos utilizados en la aplicación
+  - `ShareCollectionModal.js`: Modal para compartir colecciones
 - `/src/theme`: Sistema de temas
   - `theme.js`: Definición de colores y estilos para temas
+- `/src/utils`: Utilidades y servicios
+  - `supabase.js`: Configuración de Supabase para backend
+  - `cloudSync.js`: Funciones para sincronización en la nube
+  - `dataExport.js`: Funciones para exportación e importación de datos
+- `/src/context`: Contextos de React
+  - `AuthContext.js`: Contexto para gestión de autenticación
+- `/supabase`: Configuración de Supabase
+  - `/migrations`: Scripts SQL para inicializar tablas en Supabase
 - `/assets`: Imágenes y recursos estáticos
 
 ---
 
 ## Mejoras Futuras
 
-- Implementar sincronización en la nube
 - Añadir gráficos y estadísticas más avanzadas
 - Añadir soporte para múltiples idiomas
 - Implementar notificaciones para recordatorios
-- Añadir funcionalidad de copia de seguridad automática
-- Implementar sistema de usuarios y autenticación
+- Añadir funcionalidad de copia de seguridad automática programada
+- Implementar login con huella dactilar
+- Añadir soporte para compartir colecciones con otros usuarios
+- Implementar sistema de comentarios y colaboración
+
+---
+
+## Configuración de Supabase
+
+1. Registrarse en [Supabase](https://supabase.com) y crear un nuevo proyecto
+2. Obtener la URL y la clave anónima del proyecto desde la configuración de API
+3. Actualizar el archivo `src/utils/supabase.js` con tus credenciales:
+   ```javascript
+   const supabaseUrl = 'TU_URL_DE_SUPABASE';
+   const supabaseAnonKey = 'TU_CLAVE_ANONIMA';
+   ```
+4. Ejecutar los scripts SQL de inicialización:
+   - Ir a la sección SQL Editor en el dashboard de Supabase
+   - Copiar y pegar el contenido de `supabase/migrations/20250621_initialize_cloud_sync.sql`
+   - Ejecutar el script para crear las tablas y funciones necesarias
+
+## Uso de la Sincronización en la Nube
+
+1. Registra una cuenta o inicia sesión en la aplicación
+2. Ve a la pantalla "Cloud Sync" desde la pantalla principal
+3. Activa la sincronización en la nube
+4. Configura las opciones de sincronización según tus preferencias:
+   - Sincronización automática
+   - Sincronizar solo con WiFi
+   - Intervalo de sincronización
+5. Pulsa "Sync Now" para realizar una sincronización manual
+
+La sincronización en la nube permite:
+- Acceder a tus colecciones desde múltiples dispositivos
+- Mantener una copia de seguridad en la nube
+- Restaurar tus datos si pierdes tu dispositivo
