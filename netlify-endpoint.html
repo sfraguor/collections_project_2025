@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eBay Verification - Colecciones App</title>
+</head>
+<body>
+    <h1>eBay Marketplace Account Deletion Notification Endpoint</h1>
+    <p>This endpoint is configured for Colecciones App - Personal Collection Management</p>
+    
+    <div>
+        <h2>Privacy Policy</h2>
+        <p>This is a personal collection management application. We respect user privacy and handle data according to applicable regulations.</p>
+        
+        <h3>Data Collection</h3>
+        <ul>
+            <li>We only collect collection and item data that users voluntarily input</li>
+            <li>eBay price data is retrieved for market analysis purposes only</li>
+            <li>No personal eBay account data is accessed or stored</li>
+        </ul>
+        
+        <h3>Data Usage</h3>
+        <ul>
+            <li>Collection data is stored locally on the user's device</li>
+            <li>Market price data is used for collection valuation and trends</li>
+            <li>No data is shared with third parties</li>
+        </ul>
+        
+        <h3>Account Deletion</h3>
+        <p>Users can delete their local collection data at any time through the app settings. If you need to report an eBay account deletion for compliance purposes, this endpoint will receive and process those notifications appropriately.</p>
+    </div>
+    
+    <div>
+        <h2>Terms of Service</h2>
+        <p>This application is provided for personal use only. By using this app, you agree to:</p>
+        <ul>
+            <li>Use the app for legitimate collection management purposes</li>
+            <li>Not misuse eBay data or violate eBay's terms of service</li>
+            <li>Understand that market prices are estimates and may not reflect actual selling prices</li>
+            <li>Take responsibility for your own collection and investment decisions</li>
+        </ul>
+    </div>
+    
+    <script>
+        // Handle eBay verification challenge
+        const urlParams = new URLSearchParams(window.location.search);
+        const challenge = urlParams.get('challenge');
+        const verifyToken = urlParams.get('verify_token');
+        
+        if (challenge) {
+            // eBay verification - respond with challenge only
+            document.body.innerHTML = challenge;
+        }
+        
+        // Handle POST requests for account deletion notifications
+        if (window.location.search.includes('webhook')) {
+            console.log('eBay account deletion notification received');
+        }
+    </script>
+    
+    <footer style="margin-top: 50px; padding: 20px; background: #f5f5f5;">
+        <p><strong>Contact:</strong> For any questions about this endpoint or data handling, please contact the app developer.</p>
+        <p><strong>Last Updated:</strong> November 2025</p>
+    </footer>
+</body>
+</html>

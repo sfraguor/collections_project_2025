@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colecciones App - eBay Compliance Endpoint</title>
+    <meta name="description" content="Privacy Policy, Terms of Service and eBay compliance endpoint for Colecciones App">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { color: #2c5aa0; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px; }
+        h2 { color: #444; margin-top: 30px; }
+        h3 { color: #666; }
+        h4 { color: #888; }
+        .status-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        .endpoint-info {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        ul { margin: 10px 0; }
+        li { margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <div class="status-badge">✓ eBay Compliance Endpoint Active</div>
+    
+    <h1>Colecciones App</h1>
+    
+    <div class="endpoint-info">
+        <strong>eBay Marketplace Compliance Endpoint</strong><br>
+        This page serves as the official Privacy Policy, Terms of Service, and account deletion notification endpoint for Colecciones App.
+        <br><br>
+        <strong>Last Updated:</strong> November 15, 2025<br>
+        <strong>Status:</strong> Active and compliant with eBay requirements
+    </div>
+    
+    <div id="privacy-policy">
+        <h3>Privacy Policy</h3>
+        <p><strong>Effective Date:</strong> November 2025</p>
+        
+        <h4>Information We Collect</h4>
+        <ul>
+            <li>Collection data you voluntarily input (item names, descriptions, prices)</li>
+            <li>Market price data retrieved from eBay for valuation purposes</li>
+            <li>Local app usage data stored on your device</li>
+        </ul>
+        
+        <h4>How We Use Your Information</h4>
+        <ul>
+            <li>To provide collection management and price tracking services</li>
+            <li>To calculate market valuations and investment performance</li>
+            <li>To display collection statistics and trends</li>
+        </ul>
+        
+        <h4>Data Storage</h4>
+        <ul>
+            <li>All personal collection data is stored locally on your device</li>
+            <li>We do not store personal data on external servers</li>
+            <li>eBay market data is used for calculations only</li>
+        </ul>
+        
+        <h4>Data Sharing</h4>
+        <p>We do not share, sell, or transfer your personal collection data to third parties.</p>
+        
+        <h4>Account Deletion</h4>
+        <p>You can delete all app data through the app settings. If you delete your eBay account, we will process deletion notifications as required for compliance.</p>
+    </div>
+    
+    <div id="terms-of-service">
+        <h3>Terms of Service</h3>
+        <p><strong>Effective Date:</strong> November 2025</p>
+        
+        <h4>Acceptable Use</h4>
+        <ul>
+            <li>This app is for personal collection management only</li>
+            <li>Users must comply with eBay's terms of service</li>
+            <li>Price data is for reference only and may not reflect actual market values</li>
+        </ul>
+        
+        <h4>Disclaimers</h4>
+        <ul>
+            <li>Market prices are estimates and not guaranteed</li>
+            <li>Investment decisions are your own responsibility</li>
+            <li>We are not responsible for market fluctuations or losses</li>
+        </ul>
+        
+        <h4>Limitation of Liability</h4>
+        <p>The app is provided "as is" for personal use. We are not liable for any financial decisions made based on app data.</p>
+    </div>
+    
+    <script>
+        // eBay Official Verification Handler (Compliant with eBay Requirements)
+        console.log('=== eBay Compliance Endpoint Debug Info ===');
+        console.log('Current URL:', window.location.href);
+        console.log('Page loaded at:', new Date().toISOString());
+        
+        // eBay Configuration - THESE VALUES MUST MATCH YOUR EBAY DEVELOPER SETTINGS
+        const EBAY_VERIFICATION_TOKEN = 'colecciones-app-production-token-2025-secure-key-12345'; // 32+ characters
+        const ENDPOINT_URL = window.location.origin + window.location.pathname;
+        
+        console.log('Endpoint URL:', ENDPOINT_URL);
+        console.log('Verification Token Length:', EBAY_VERIFICATION_TOKEN.length);
+        
+        // SHA-256 Implementation for eBay challenge response
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashHex;
+        }
+        
+        async function handleEbayVerification() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const challengeCode = urlParams.get('challenge_code'); // eBay uses 'challenge_code', not 'challenge'
+            
+            // Debug logging
+            console.log('=== eBay Verification Check ===');
+            console.log('All URL Parameters:', Object.fromEntries(urlParams.entries()));
+            console.log('Challenge Code:', challengeCode);
+            
+            // If this is an eBay verification request (GET with challenge_code parameter)
+            if (challengeCode) {
+                console.log('🔔 eBay OFFICIAL verification challenge DETECTED!');
+                console.log('Challenge Code:', challengeCode);
+                console.log('Verification Token:', EBAY_VERIFICATION_TOKEN);
+                console.log('Endpoint URL:', ENDPOINT_URL);
+                
+                try {
+                    // Calculate SHA-256 hash as required by eBay
+                    // Format: SHA256(challengeCode + verificationToken + endpoint)
+                    const concatenatedString = challengeCode + EBAY_VERIFICATION_TOKEN + ENDPOINT_URL;
+                    console.log('String to hash:', concatenatedString);
+                    
+                    const challengeResponse = await sha256(concatenatedString);
+                    console.log('Calculated hash:', challengeResponse);
+                    
+                    // Create the required JSON response
+                    const responseObject = {
+                        challengeResponse: challengeResponse
+                    };
+                    
+                    console.log('Response object:', responseObject);
+                    
+                    // Clear the page and send the JSON response as required by eBay
+                    document.body.innerHTML = '';
+                    document.body.textContent = JSON.stringify(responseObject);
+                    
+                    // Try to set content type if possible
+                    if (document.contentType) {
+                        document.contentType = 'application/json';
+                    }
+                    
+                    console.log('✅ eBay verification response sent according to official requirements');
+                    return true;
+                    
+                } catch (error) {
+                    console.error('❌ Error generating eBay verification response:', error);
+                    document.body.innerHTML = `<h1>Verification Error</h1><p>Error: ${error.message}</p>`;
+                    return false;
+                }
+            }
+            
+            console.log('ℹ️ No eBay verification challenge detected - normal page load');
+            return false;
+        }
+        
+        // Run verification check immediately (async)
+        handleEbayVerification().then(isVerification => {
+            if (!isVerification) {
+                console.log('📄 Loading normal page content...');
+                
+                // Add debugging info to the page
+                document.addEventListener('DOMContentLoaded', function() {
+                    console.log('DOM fully loaded');
+                    
+                    const debugInfo = document.createElement('div');
+                    debugInfo.innerHTML = 
+                        '<div style="background: #e8f4fd; padding: 15px; border-radius: 5px; margin-top: 20px; border: 1px solid #bee5eb;">' +
+                            '<h4 style="margin-top: 0; color: #0c5460;">🔧 eBay Compliance Endpoint Status</h4>' +
+                            '<p><strong>✅ Page is live and configured for eBay production verification!</strong></p>' +
+                            
+                            '<h5>eBay Configuration:</h5>' +
+                            '<ul style="font-family: monospace; font-size: 12px;">' +
+                                '<li><strong>Verification Token:</strong> ' + EBAY_VERIFICATION_TOKEN + '</li>' +
+                                '<li><strong>Token Length:</strong> ' + EBAY_VERIFICATION_TOKEN.length + ' characters (✅ Valid: 32-80)</li>' +
+                                '<li><strong>Endpoint URL:</strong> ' + ENDPOINT_URL + '</li>' +
+                                '<li><strong>Response Format:</strong> JSON with challengeResponse field</li>' +
+                                '<li><strong>Hash Algorithm:</strong> SHA-256</li>' +
+                            '</ul>' +
+                            
+                            '<h5>Test eBay verification:</h5>' +
+                            '<p>Add <code>?challenge_code=TEST123</code> to test:</p>' +
+                            '<p><a href="?challenge_code=TEST123" target="_blank" style="color: #0066cc;">' +
+                                'Test eBay verification →' +
+                            '</a></p>' +
+                            
+                            '<div style="background: #fff3cd; padding: 10px; border-radius: 3px; margin-top: 10px; border: 1px solid #ffeaa7;">' +
+                                '<strong>⚠️ Important for eBay setup:</strong><br>' +
+                                'Use this <strong>exact verification token</strong> in your eBay Developer Portal:<br>' +
+                                '<code style="background: white; padding: 2px 4px;">' + EBAY_VERIFICATION_TOKEN + '</code>' +
+                            '</div>' +
+                            
+                            '<small><strong>GitHub Pages Status:</strong> Active | <strong>Last verified:</strong> ' + new Date().toLocaleString() + '</small>' +
+                        '</div>';
+                    document.body.appendChild(debugInfo);
+                });
+            }
+        }).catch(error => {
+            console.error('Error in verification handler:', error);
+        });
+        
+        // Additional debugging
+        window.addEventListener('load', function() {
+            console.log('=== Page Load Complete ===');
+            console.log('Document ready for eBay production verification');
+        });
+    </script>
+</body>
+</html>

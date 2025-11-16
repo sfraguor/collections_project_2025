@@ -27,6 +27,7 @@ import {
   ProfileIcon,
   CloudIcon
 } from '../components/AppIcons';
+import { Ionicons } from '@expo/vector-icons';
 
 // Storage key with user ID to separate data by user
 const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
@@ -216,14 +217,24 @@ const HomeScreen = ({ navigation }) => {
         
         <View style={styles.actionButtonsRow}>
           <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#FF6B6B' }]}
+            onPress={() => navigation.navigate('Discovery')}
+          >
+            <Ionicons name="compass-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.actionButtonText}>Discover</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: colors.accent }]}
             onPress={() => navigation.navigate('CloudSync')}
           >
             <CloudIcon color="#FFFFFF" size={20} />
             <Text style={styles.actionButtonText}>Cloud Sync</Text>
           </TouchableOpacity>
-          
-          <ThemeToggle containerStyle={styles.themeToggleContainer} />
+        </View>
+        
+        <View style={styles.actionButtonsRow}>
+          <ThemeToggle containerStyle={styles.themeToggleFullWidth} />
         </View>
       </View>
       
@@ -363,6 +374,10 @@ const styles = StyleSheet.create({
   },
   themeToggleContainer: {
     flex: 0.7,
+    marginHorizontal: 4,
+  },
+  themeToggleFullWidth: {
+    flex: 1,
     marginHorizontal: 4,
   },
   searchContainer: {

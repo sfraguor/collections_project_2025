@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/ebay-endpoint.js": {
+      "maxDuration": 30
+    }
+  }
+}

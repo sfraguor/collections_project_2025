@@ -139,3 +139,60 @@ La sincronización en la nube permite:
 - Acceder a tus colecciones desde múltiples dispositivos
 - Mantener una copia de seguridad en la nube
 - Restaurar tus datos si pierdes tu dispositivo
+
+---
+
+## Compilación de la Aplicación con EAS Build
+
+Para compilar la aplicación para producción o desarrollo, utilizamos EAS Build, el servicio de compilación de Expo:
+
+### Requisitos Previos
+
+1. Instalar EAS CLI globalmente:
+   ```bash
+   npm install -g eas-cli
+   ```
+
+2. Iniciar sesión en tu cuenta de Expo:
+   ```bash
+   eas login
+   ```
+
+### Compilación para Desarrollo
+
+Para compilar una versión de desarrollo que puedas instalar en tu dispositivo:
+
+```bash
+npm run build:dev:android  # Para Android
+npm run build:dev:ios      # Para iOS
+```
+
+### Compilación para Pruebas (Preview)
+
+Para compilar una versión de prueba que puedas compartir con testers:
+
+```bash
+npm run build:android  # Para Android
+npm run build:ios      # Para iOS
+```
+
+### Compilación para Producción
+
+Para compilar la versión final para publicación en las tiendas:
+
+```bash
+npm run build:prod  # Para Android e iOS
+```
+
+### Solución de Problemas de Compilación
+
+Si encuentras problemas durante la compilación:
+
+1. Asegúrate de tener la última versión de EAS CLI:
+   ```bash
+   npm install -g eas-cli@latest
+   ```
+
+2. Verifica que las configuraciones en `eas.json` y `app.json` sean correctas
+3. Para problemas específicos de Android, revisa que los valores de SDK en `app.json` sean compatibles con tu proyecto
+4. Para errores de autolinking, asegúrate de que todas las dependencias nativas estén correctamente configuradas

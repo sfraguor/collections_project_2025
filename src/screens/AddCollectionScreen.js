@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, Image, Platform, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert, Image, Platform, ScrollView, KeyboardAvoidingView, Switch } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import uuid from 'react-native-uuid';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../utils/supabase';
 
 // Storage key with user ID to separate data by user
 const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
@@ -11,7 +12,8 @@ const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
 const AddCollectionScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [name, setName] = useState('');
-  const [cover, setCover] = useState(null); // aquí guardaremos la URI local de la imagen
+  const [imageUri, setImageUri] = useState(null); // URI local de la imagen de la colección
+  const [isPublic, setIsPublic] = useState(true); // Por defecto público para facilitar descubrimiento
 
   // pedir permisos para cámara y galería
   const requestPermissions = async () => {
@@ -33,13 +35,14 @@ const AddCollectionScreen = ({ navigation }) => {
     if (!hasPermission) return;
 
     let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: false,
+      quality: 1,
+      exif: false,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setCover(result.assets[0].uri);
+      setImageUri(result.assets[0].uri);
     }
   };
 
@@ -49,13 +52,14 @@ const AddCollectionScreen = ({ navigation }) => {
     if (!hasPermission) return;
 
     let result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: false,
+      quality: 1,
+      exif: false,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setCover(result.assets[0].uri);
+      setImageUri(result.assets[0].uri);
     }
   };
 
@@ -76,18 +80,53 @@ const AddCollectionScreen = ({ navigation }) => {
         return;
       }
 
+      const collectionId = uuid.v4();
       const newCollection = {
-        id: uuid.v4(),
+        id: collectionId,
         name: name.trim(),
-        cover: cover || null,
+        image: imageUri || null, // URI de la imagen seleccionada
         userId: user?.id || 'guest',
+        is_public: isPublic,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      collections.push(newCollection);
 
+      // Guardar en Supabase si hay usuario
+      if (user?.id) {
+        try {
+          const { data, error } = await supabase
+            .from('collections')
+            .insert({
+              id: collectionId,
+              name: name.trim(),
+              image: imageUri || null, // Solo usar 'image'
+              user_id: user.id,
+              is_public: isPublic,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Supabase insert error:', error);
+          } else {
+            console.log('✅ Collection created in Supabase:', data);
+          }
+        } catch (supabaseError) {
+          console.error('Supabase error:', supabaseError);
+          // Continuar con AsyncStorage como fallback
+        }
+      }
+
+      collections.push(newCollection);
       await AsyncStorage.setItem(storageKey, JSON.stringify(collections));
-      navigation.goBack();
+      
+      Alert.alert(
+        'Success!', 
+        `Collection "${name.trim()}" created ${isPublic ? 'as public' : 'as private'}!`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
     } catch (e) {
       console.error('Error saving collection:', e);
       Alert.alert('Error', 'Failed to save collection: ' + e.message);
@@ -112,9 +151,30 @@ const AddCollectionScreen = ({ navigation }) => {
           <Button title="Pick Image" onPress={pickImage} />
         </View>
 
-        {cover && (
-          <Image source={{ uri: cover }} style={{ width: '100%', height: 200, borderRadius: 12, marginBottom: 20 }} />
+        {imageUri && (
+          <Image source={{ uri: imageUri }} style={{ width: '100%', height: 200, borderRadius: 12, marginBottom: 20 }} />
         )}
+
+        {/* Public/Private Toggle */}
+        <View style={styles.toggleContainer}>
+          <View style={styles.toggleInfo}>
+            <Text style={styles.toggleTitle}>
+              {isPublic ? '🌍 Public Collection' : '🔒 Private Collection'}
+            </Text>
+            <Text style={styles.toggleDescription}>
+              {isPublic 
+                ? "✅ Will be discoverable by other users in the community" 
+                : "❌ Only visible to you"
+              }
+            </Text>
+          </View>
+          <Switch
+            value={isPublic}
+            onValueChange={setIsPublic}
+            trackColor={{ false: '#767577', true: '#81b0ff' }}
+            thumbColor={isPublic ? '#007AFF' : '#f4f3f4'}
+          />
+        </View>
 
         <Button title="Save Collection" onPress={saveCollection} />
       </ScrollView>
@@ -132,6 +192,32 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 16,
     fontSize: 16,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  toggleInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  toggleTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  toggleDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
 });
 

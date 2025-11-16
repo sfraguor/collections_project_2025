@@ -33,6 +33,7 @@ const AddItemScreen = ({ route, navigation }) => {
   const [description, setDescription] = useState('');
   const [images, setImages] = useState([]);
   const [price, setPrice] = useState('');
+  const [ebaySearchTerms, setEbaySearchTerms] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
   const [condition, setCondition] = useState('');
   const [notes, setNotes] = useState('');
@@ -60,9 +61,10 @@ const AddItemScreen = ({ route, navigation }) => {
     if (!hasPermission) return;
 
     let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: false,
+      quality: 1,
+      exif: false,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -76,9 +78,10 @@ const AddItemScreen = ({ route, navigation }) => {
     if (!hasPermission) return;
 
     let result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: false,
+      quality: 1,
+      exif: false,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -109,7 +112,12 @@ const AddItemScreen = ({ route, navigation }) => {
       name,
       description,
       images: images || [],
-      price: price || '',
+      price: price || '', // This becomes purchase_price
+      purchase_price: price || '', // Original purchase price
+      current_market_price: null, // To be populated by eBay API
+      ebay_search_terms: ebaySearchTerms || '', // eBay search terms for price tracking
+      price_history: [], // Array of {price, date, source} objects
+      last_price_update: null, // Timestamp of last market price update
       purchaseDate: purchaseDate || '',
       condition: condition || '',
       notes: notes || '',
@@ -239,10 +247,27 @@ const AddItemScreen = ({ route, navigation }) => {
         }]}
         value={price}
         onChangeText={setPrice}
-        placeholder="Enter price"
+        placeholder="Enter purchase price"
         placeholderTextColor={colors.placeholder}
         keyboardType="numeric"
       />
+
+      <Text style={[styles.label, { color: colors.text }]}>eBay Search Terms (Optional)</Text>
+      <TextInput
+        style={[styles.input, { 
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          color: colors.text
+        }]}
+        value={ebaySearchTerms}
+        onChangeText={setEbaySearchTerms}
+        placeholder="Keywords to find this item on eBay for market price tracking"
+        placeholderTextColor={colors.placeholder}
+        multiline
+      />
+      <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+        💡 Example: "iPhone 14 Pro 256GB Space Black" - helps track current market value
+      </Text>
 
       <Text style={[styles.label, { color: colors.text }]}>Purchase Date</Text>
       <TextInput
@@ -404,6 +429,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
+  },
+  helperText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
+    marginBottom: 8,
   },
 });
 

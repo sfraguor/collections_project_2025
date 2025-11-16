@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>eBay Verification Endpoint - Colecciones App</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>eBay Marketplace Account Deletion Notification Endpoint</h1>
+    <p>This endpoint is configured for Colecciones App.</p>
+    
+    <!-- eBay verification token response -->
+    <script>
+        // If this is a verification request, respond with the challenge
+        const urlParams = new URLSearchParams(window.location.search);
+        const challenge = urlParams.get('challenge');
+        const verifyToken = urlParams.get('token');
+        
+        if (challenge && verifyToken) {
+            // Respond with just the challenge value
+            document.write(challenge);
+        }
+    </script>
+    
+    <div id="info">
+        <h2>Endpoint Information</h2>
+        <ul>
+            <li><strong>Purpose:</strong> Account deletion notifications</li>
+            <li><strong>App:</strong> Colecciones App</li>
+            <li><strong>Status:</strong> Active</li>
+            <li><strong>Last Updated:</strong> November 2025</li>
+        </ul>
+    </div>
+</body>
+</html>

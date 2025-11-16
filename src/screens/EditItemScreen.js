@@ -32,7 +32,8 @@ const EditItemScreen = ({ route, navigation }) => {
   const [name, setName] = useState(item.name);
   const [description, setDescription] = useState(item.description || '');
   const [images, setImages] = useState(item.images || (item.image ? [item.image] : []));
-  const [price, setPrice] = useState(item.price || '');
+  const [price, setPrice] = useState(item.price || item.purchase_price || '');
+  const [ebaySearchTerms, setEbaySearchTerms] = useState(item.ebay_search_terms || '');
   const [purchaseDate, setPurchaseDate] = useState(item.purchaseDate || '');
   const [condition, setCondition] = useState(item.condition || '');
   const [notes, setNotes] = useState(item.notes || '');
@@ -60,9 +61,10 @@ const EditItemScreen = ({ route, navigation }) => {
     if (!hasPermission) return;
 
     let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: false,
+      quality: 1,
+      exif: false,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -76,9 +78,10 @@ const EditItemScreen = ({ route, navigation }) => {
     if (!hasPermission) return;
 
     let result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: false,
+      quality: 1,
+      exif: false,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -117,6 +120,12 @@ const EditItemScreen = ({ route, navigation }) => {
           // Keep image field for backward compatibility
           image: images.length > 0 ? images[0] : '',
           price,
+          purchase_price: price, // Update purchase price
+          ebay_search_terms: ebaySearchTerms, // Update eBay search terms
+          // Preserve existing price tracking data
+          current_market_price: i.current_market_price || null,
+          price_history: i.price_history || [],
+          last_price_update: i.last_price_update || null,
           purchaseDate,
           condition,
           notes,
@@ -239,10 +248,33 @@ const EditItemScreen = ({ route, navigation }) => {
         }]}
         value={price}
         onChangeText={setPrice}
-        placeholder="Enter price"
+        placeholder="Enter purchase price"
         placeholderTextColor={colors.placeholder}
         keyboardType="numeric"
       />
+
+      <Text style={[styles.label, { color: colors.text }]}>eBay Search Terms (Optional)</Text>
+      <TextInput
+        style={[styles.input, { 
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          color: colors.text
+        }]}
+        value={ebaySearchTerms}
+        onChangeText={setEbaySearchTerms}
+        placeholder="Keywords to find this item on eBay for market price tracking"
+        placeholderTextColor={colors.placeholder}
+        multiline
+      />
+      {item.current_market_price && (
+        <Text style={[styles.marketPriceInfo, { color: colors.success }]}>
+          📈 Current market price: ${item.current_market_price}
+          {item.last_price_update && ` (updated ${new Date(item.last_price_update).toLocaleDateString()})`}
+        </Text>
+      )}
+      <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+        💡 Example: "iPhone 14 Pro 256GB Space Black" - helps track current market value
+      </Text>
 
       <Text style={[styles.label, { color: colors.text }]}>Purchase Date</Text>
       <TextInput
@@ -404,6 +436,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
+  },
+  helperText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  marketPriceInfo: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
+    marginBottom: 4,
   },
 });
 

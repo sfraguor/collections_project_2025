@@ -16,6 +16,9 @@ import AddCollectionScreen from './src/screens/AddCollectionScreen';
 import EditCollectionScreen from './src/screens/EditCollectionScreen';
 import DataExportScreen from './src/screens/DataExportScreen';
 import CloudSyncScreen from './src/screens/CloudSyncScreen';
+import DiscoveryScreen from './src/screens/DiscoveryScreen';
+import PublicCollectionViewScreen from './src/screens/PublicCollectionViewScreen';
+import UserProfileScreen from './src/screens/UserProfileScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
@@ -96,6 +99,17 @@ function MainAppNavigator() {
       }}
     >
       <AppStack.Screen name="Home" component={HomeScreen} />
+      <AppStack.Screen name="Discovery" component={DiscoveryScreen} options={{ headerShown: false }} />
+      <AppStack.Screen 
+        name="PublicCollectionView" 
+        component={PublicCollectionViewScreen} 
+        options={{ headerShown: false }} 
+      />
+      <AppStack.Screen 
+        name="UserProfile" 
+        component={UserProfileScreen} 
+        options={{ headerShown: false }} 
+      />
       <AppStack.Screen
         name="Collection"
         component={CollectionScreen}
