@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, Image, Platform, ScrollView, KeyboardAvoidingView, Switch, TouchableOpacity, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../theme/theme';
 import { updateCollectionVisibility } from '../utils/communityApi';
-import { supabase } from '../utils/supabase';
-
-// Storage key with user ID to separate data by user
-const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
+import CategorySelector from '../components/CategorySelector';
+import { getCollectionById, updateCollection } from '../utils/database';
 
 const EditCollectionScreen = ({ route, navigation }) => {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const { collectionId } = route.params;
   const [name, setName] = useState('');
+  const [category, setCategory] = useState('other');
   const [imageUri, setImageUri] = useState(null);
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -23,42 +23,30 @@ const EditCollectionScreen = ({ route, navigation }) => {
     const loadCollection = async () => {
       setInitialLoading(true);
       try {
-        // Intentar cargar desde Supabase primero
-        if (user?.id) {
-          const { data: supabaseCollection, error } = await supabase
-            .from('collections')
-            .select('id, name, is_public, image')
-            .eq('id', collectionId)
-            .eq('user_id', user.id)
-            .single();
-
-          if (!error && supabaseCollection) {
-            console.log('✅ Collection loaded from Supabase:', supabaseCollection);
-            setName(supabaseCollection.name || '');
-            setImageUri(supabaseCollection.image || null);
-            setIsPublic(supabaseCollection.is_public || false);
-            setInitialLoading(false);
-            return;
-          } else {
-            console.log('⚠️ Collection not found in Supabase, trying AsyncStorage');
-          }
+        if (!user?.id) {
+          Alert.alert('Error', 'Please sign in to edit collections');
+          navigation.goBack();
+          return;
         }
 
-        // Fallback a AsyncStorage si no está en Supabase
-        const storageKey = getStorageKey(user?.id);
-        const json = await AsyncStorage.getItem(storageKey);
-        if (json) {
-          const collections = JSON.parse(json);
-          const collection = collections.find(c => c.id === collectionId);
-          if (collection) {
-            setName(collection.name || '');
-            setImageUri(collection.image || collection.cover || null); // Compatibilidad con datos viejos
-            setIsPublic(collection.is_public || false);
-          }
+        // Cargar desde Supabase
+        const collection = await getCollectionById(collectionId, user.id);
+        
+        if (collection) {
+          console.log('✅ Collection loaded:', collection);
+          console.log('📂 Category:', collection.category);
+          setName(collection.name || '');
+          setCategory(collection.category || 'other');
+          setImageUri(collection.image || null);
+          setIsPublic(collection.is_public || false);
+        } else {
+          Alert.alert('Error', 'Collection not found');
+          navigation.goBack();
         }
       } catch (e) {
         console.error('Error loading collection:', e);
         Alert.alert('Error', 'Failed to load collection');
+        navigation.goBack();
       } finally {
         setInitialLoading(false);
       }
@@ -121,57 +109,22 @@ const EditCollectionScreen = ({ route, navigation }) => {
       return;
     }
 
+    if (!user?.id) {
+      Alert.alert('Error', 'Please sign in to update collections');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Actualizar en Supabase si existe el usuario
-      if (user?.id) {
-        const { data, error } = await supabase
-          .from('collections')
-          .update({
-            name: name.trim(),
-            image: imageUri || null, // Solo usar 'image'
-            is_public: isPublic,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', collectionId)
-          .eq('user_id', user.id)
-          .select()
-          .single();
+      // Actualizar en Supabase
+      const updateData = {
+        name: name.trim(),
+        category: category,
+        image: imageUri || null,
+        is_public: isPublic,
+      };
 
-        if (error) {
-          console.error('Supabase update error:', error);
-          // Continuar con AsyncStorage como fallback
-        } else {
-          console.log('✅ Collection updated in Supabase:', data);
-        }
-      }
-
-      // También actualizar AsyncStorage para compatibilidad
-      const storageKey = getStorageKey(user?.id);
-      const json = await AsyncStorage.getItem(storageKey);
-      let collections = json ? JSON.parse(json) : [];
-
-      // Validar que no haya otro con el mismo nombre (excluyendo el que editamos)
-      if (collections.some(c => c.name.toLowerCase() === name.trim().toLowerCase() && c.id !== collectionId)) {
-        Alert.alert('Validation', 'A collection with this name already exists.');
-        return;
-      }
-
-      // Actualizar la colección editada
-      collections = collections.map(c => {
-        if (c.id === collectionId) {
-          return { 
-            ...c, 
-            name: name.trim(), 
-            image: imageUri || null, // Solo image
-            is_public: isPublic,
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return c;
-      });
-
-      await AsyncStorage.setItem(storageKey, JSON.stringify(collections));
+      await updateCollection(collectionId, user.id, updateData);
       
       Alert.alert(
         'Success', 
@@ -188,28 +141,44 @@ const EditCollectionScreen = ({ route, navigation }) => {
 
   if (initialLoading) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading collection...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading collection...</Text>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.select({ ios: 'padding', android: undefined })}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Edit Collection</Text>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.select({ ios: 'padding', android: undefined })}>
+      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Edit Collection</Text>
         <TextInput
           placeholder="Collection Name"
-          style={styles.input}
+          placeholderTextColor={colors.placeholder}
+          style={[styles.input, { 
+            borderColor: colors.border, 
+            backgroundColor: colors.card,
+            color: colors.text 
+          }]}
           value={name}
           onChangeText={setName}
           autoCapitalize="words"
         />
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
-          <Button title="Take Photo" onPress={takePhoto} />
-          <Button title="Pick Image" onPress={pickImage} />
+        {/* Category Selector */}
+        <Text style={[styles.label, { color: colors.text }]}>Category</Text>
+        <CategorySelector
+          selectedCategory={category}
+          onSelect={(categoryId) => {
+            setCategory(categoryId);
+          }}
+          style={{ marginBottom: 20 }}
+        />
+
+        <Text style={[styles.label, { color: colors.text }]}>Images</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
+          <Button title="Take Photo" onPress={takePhoto} color={colors.primary} />
+          <Button title="Pick Image" onPress={pickImage} color={colors.primary} />
         </View>
 
         {imageUri && (
@@ -217,12 +186,15 @@ const EditCollectionScreen = ({ route, navigation }) => {
         )}
 
         {/* Public/Private Toggle */}
-        <View style={styles.toggleContainer}>
+        <View style={[styles.toggleContainer, { 
+          backgroundColor: colors.card,
+          borderColor: colors.border 
+        }]}>
           <View style={styles.toggleInfo}>
-            <Text style={styles.toggleTitle}>
+            <Text style={[styles.toggleTitle, { color: colors.text }]}>
               {isPublic ? '🌍 Public Collection' : '🔒 Private Collection'}
             </Text>
-            <Text style={styles.toggleDescription}>
+            <Text style={[styles.toggleDescription, { color: colors.textSecondary }]}>
               {isPublic 
                 ? "✅ Visible in Discovery • Others can like, comment & clone" 
                 : "❌ Only visible to you • Not shown in community"
@@ -231,40 +203,52 @@ const EditCollectionScreen = ({ route, navigation }) => {
           </View>
           <Switch
             value={isPublic}
-            onValueChange={setIsPublic} // Simplificado - se guarda al hacer "Save Changes"
+            onValueChange={setIsPublic}
             disabled={loading}
-            trackColor={{ false: '#767577', true: '#81b0ff' }}
-            thumbColor={isPublic ? '#007AFF' : '#f4f3f4'}
+            trackColor={{ false: '#767577', true: colors.primary + '80' }}
+            thumbColor={isPublic ? colors.primary : '#f4f3f4'}
           />
         </View>
 
-        <Button title="Save Changes" onPress={saveCollection} disabled={loading} />
+        <Button title="Save Changes" onPress={saveCollection} disabled={loading} color={colors.primary} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 24, backgroundColor: '#fff', flexGrow: 1, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '700', marginBottom: 24, color: '#222', textAlign: 'center' },
+  container: { 
+    padding: 24, 
+    flexGrow: 1, 
+    justifyContent: 'center' 
+  },
+  title: { 
+    fontSize: 24, 
+    fontWeight: '700', 
+    marginBottom: 24, 
+    textAlign: 'center' 
+  },
   input: {
     borderWidth: 1,
-    borderColor: '#aaa',
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
     fontSize: 16,
   },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 8,
+  },
   toggleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f8f9fa',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#e9ecef',
   },
   toggleInfo: {
     flex: 1,
@@ -273,12 +257,10 @@ const styles = StyleSheet.create({
   toggleTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
     marginBottom: 4,
   },
   toggleDescription: {
     fontSize: 14,
-    color: '#666',
     lineHeight: 20,
   },
   loadingContainer: {
@@ -289,7 +271,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#666',
   },
 });
 

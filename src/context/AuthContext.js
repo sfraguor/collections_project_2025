@@ -1,6 +1,11 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform, Linking } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { supabase } from '../utils/supabase';
+
+// Ensure WebBrowser closes correctly after OAuth
+WebBrowser.maybeCompleteAuthSession();
 
 // Create the authentication context
 const AuthContext = createContext({
@@ -9,6 +14,7 @@ const AuthContext = createContext({
   loading: true,
   signUp: async () => {},
   signIn: async () => {},
+  signInWithGoogle: async () => {},
   signOut: async () => {},
   forgotPassword: async () => {},
   resetPassword: async () => {},
@@ -47,6 +53,12 @@ export function AuthProvider({ children }) {
   async function checkUser() {
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
+      console.log('🔐 Checking auth session...');
+      console.log('   Session found:', currentSession ? 'YES' : 'NO');
+      if (currentSession) {
+        console.log('   User email:', currentSession.user?.email);
+        console.log('   User ID:', currentSession.user?.id);
+      }
       setSession(currentSession);
       setUser(currentSession?.user || null);
     } catch (error) {
@@ -98,6 +110,78 @@ export function AuthProvider({ children }) {
       return { data, error: null };
     } catch (error) {
       console.error('Error signing in:', error.message);
+      return { data: null, error };
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Sign in with Google OAuth
+  async function signInWithGoogle() {
+    try {
+      setLoading(true);
+      console.log('🔵 Starting Google Sign-In...');
+
+      // Get the correct redirect URL for the current environment
+      const redirectUrl = AuthSession.makeRedirectUri({
+        path: 'auth/callback',
+      });
+      
+      console.log('🔵 Redirect URL:', redirectUrl);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+
+      console.log('🔵 OAuth URL received:', data?.url);
+
+      // Open the OAuth URL in browser
+      if (data?.url) {
+        console.log('🔵 Opening browser...');
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        console.log('🔵 Browser result:', result);
+
+        if (result.type === 'success') {
+          console.log('🟢 OAuth success! URL:', result.url);
+          // Extract tokens from URL
+          const url = result.url;
+          const params = new URLSearchParams(url.split('#')[1] || url.split('?')[1]);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          console.log('🔵 Access token found:', !!accessToken);
+
+          if (accessToken) {
+            // Set the session with the tokens
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+            });
+
+            if (sessionError) throw sessionError;
+            console.log('🟢 Session set successfully!');
+            return { data: sessionData, error: null };
+          }
+        } else {
+          console.log('🔴 OAuth result type:', result.type);
+        }
+
+        return { data: null, error: new Error('OAuth was cancelled') };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      console.error('Error signing in with Google:', error.message);
       return { data: null, error };
     } finally {
       setLoading(false);
@@ -188,6 +272,7 @@ export function AuthProvider({ children }) {
     loading,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     forgotPassword,
     resetPassword,

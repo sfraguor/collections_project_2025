@@ -12,27 +12,35 @@ import {
   TouchableOpacity,
   FlatList,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
+import uuid from 'react-native-uuid';
 import TagSelector from '../components/TagSelector';
+import ConditionSelector from '../components/ConditionSelector';
 import ImageGallery from '../components/ImageGallery';
 import FullscreenImageViewer from '../components/FullscreenImageViewer';
+import { uploadImage } from '../utils/imageUpload';
+import PriceInput from '../components/PriceInput';
 import { useTheme } from '../theme/theme';
+import { getConditionById } from '../utils/conditionStates';
 import { useAuth } from '../context/AuthContext';
 import { CameraIcon, GalleryIcon, DeleteIcon, AddIcon } from '../components/AppIcons';
-
-// Helper function to get item storage key with user ID
-const getItemStorageKey = (userId, collectionId) => `${userId || 'guest'}_${collectionId}`;
+import { DEFAULT_CURRENCY } from '../utils/currencyUtils';
+import { createItem, getCollectionById } from '../utils/database';
 
 const AddItemScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { collectionId } = route.params;
 
+  const [collection, setCollection] = useState(null);
   const [name, setName] = useState('');
+  const [cardNumber, setCardNumber] = useState(''); // Número o código de la carta
   const [description, setDescription] = useState('');
   const [images, setImages] = useState([]);
   const [price, setPrice] = useState('');
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
+  const [highValue, setHighValue] = useState(false); // Item de alto valor
   const [ebaySearchTerms, setEbaySearchTerms] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
   const [condition, setCondition] = useState('');
@@ -40,6 +48,53 @@ const AddItemScreen = ({ route, navigation }) => {
   const [tags, setTags] = useState([]);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [fullscreenIndex, setFullscreenIndex] = useState(0);
+  const [showConditionSelector, setShowConditionSelector] = useState(false);
+  
+  // Custom fields for specific categories
+  const [kokeshiAuthor, setKokeshiAuthor] = useState('');
+  const [kokeshiStyle, setKokeshiStyle] = useState('');
+  const [itemHeight, setItemHeight] = useState('');
+
+  // Kokeshi styles options
+  const kokeshiStyles = [
+    'Naruko', 'Tsuchiyu', 'Tōgatta', 'Yajirō', 'Sakunami', 
+    'Hijiori', 'Zaō', 'Nambu', 'Kijiyama', 'Tsugaru', 
+    'Nakanosawa', 'Tokyo', 'Desconocido'
+  ];
+
+  // Load collection to check category
+  React.useEffect(() => {
+    console.log('🔍 AddItemScreen mounted. User:', user?.id, 'CollectionId:', collectionId);
+    const loadCollection = async () => {
+      if (user?.id && collectionId) {
+        console.log('📥 Loading collection...');
+        const col = await getCollectionById(collectionId, user.id);
+        console.log('📦 Collection loaded:', col);
+        setCollection(col);
+      } else {
+        console.log('⚠️ Missing user or collectionId');
+      }
+    };
+    loadCollection();
+  }, [user?.id, collectionId]);
+
+  // Check if collection is a trading card collection
+  const isCardCollection = collection?.category === 'trading-cards' || collection?.category === 'cartas-coleccionables';
+  
+  // Check if collection is kokeshi or mingei (both need size field)
+  const isKokeshiCollection = collection?.category === 'kokeshi';
+  const isMingeiCollection = collection?.category === 'mingei';
+  const needsHeightField = isKokeshiCollection || isMingeiCollection;
+  
+  console.log('🎎 Render - Is Kokeshi Collection?', isKokeshiCollection, 'Category:', collection?.category);
+  
+  // Debug: Log collection info
+  React.useEffect(() => {
+    if (collection) {
+      console.log('📦 Collection loaded:', collection.name, 'Category:', collection.category);
+      console.log('🎎 Is Kokeshi Collection?', isKokeshiCollection);
+    }
+  }, [collection, isKokeshiCollection]);
 
   // Request permissions for camera and gallery
   const requestPermissions = async () => {
@@ -107,35 +162,79 @@ const AddItemScreen = ({ route, navigation }) => {
       Alert.alert('Validation', 'Name is required');
       return;
     }
+    
+    if (!user?.id) {
+      Alert.alert('Error', 'Please sign in to add items');
+      return;
+    }
+    
+    // Upload images to Supabase Storage
+    console.log('📤 Uploading item images to Supabase Storage...');
+    const uploadedImages = [];
+    for (const imageUri of images) {
+      try {
+        if (imageUri.startsWith('file://') || imageUri.startsWith('content://')) {
+          console.log('📤 Uploading local image:', imageUri);
+          const publicUrl = await uploadImage(imageUri, user.id, 'item');
+          uploadedImages.push(publicUrl);
+          console.log('✅ Image uploaded successfully:', publicUrl);
+        } else {
+          // Already a cloud URL
+          uploadedImages.push(imageUri);
+        }
+      } catch (error) {
+        console.error('❌ Error uploading image:', error);
+        Alert.alert('Error', `Failed to upload image: ${error.message}`);
+        return;
+      }
+    }
+    
+    // Build custom_fields based on collection category
+    const customFields = {};
+    if (isKokeshiCollection) {
+      if (kokeshiAuthor) customFields.author = kokeshiAuthor;
+      if (kokeshiStyle) customFields.style = kokeshiStyle;
+    }
+    if (needsHeightField && itemHeight) {
+      customFields.height = itemHeight;
+    }
+    
     const newItem = {
-      id: Date.now().toString(),
+      id: uuid.v4(),
+      collection_id: collectionId,
       name,
+      card_number: cardNumber?.trim() || null,
       description,
-      images: images || [],
-      price: price || '', // This becomes purchase_price
-      purchase_price: price || '', // Original purchase price
-      current_market_price: null, // To be populated by eBay API
-      ebay_search_terms: ebaySearchTerms || '', // eBay search terms for price tracking
-      price_history: [], // Array of {price, date, source} objects
-      last_price_update: null, // Timestamp of last market price update
-      purchaseDate: purchaseDate || '',
+      images: uploadedImages,
+      price: price || '',
+      purchase_price: price || '',
+      currency: currency,
+      purchase_currency: currency,
+      current_market_price: null,
+      current_market_currency: null,
+      ebay_search_terms: ebaySearchTerms || '',
+      price_history: [],
+      last_price_update: null,
+      high_value: highValue,
+      purchase_date: purchaseDate || '',
       condition: condition || '',
       notes: notes || '',
       tags: tags || [],
-      userId: user?.id || 'guest',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      custom_fields: customFields,
     };
 
+    // Debug log to verify eBay search terms are being saved
+    console.log('💾 Saving item:', newItem.name, 'Card#:', newItem.card_number, 'eBay terms:', newItem.ebay_search_terms);
+
     try {
-      const itemStorageKey = getItemStorageKey(user?.id, collectionId);
-      const existing = await AsyncStorage.getItem(itemStorageKey);
-      const items = existing ? JSON.parse(existing) : [];
-      items.push(newItem);
-      await AsyncStorage.setItem(itemStorageKey, JSON.stringify(items));
+      await createItem(user.id, newItem);
+      Alert.alert('Success', 'Item added successfully');
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', 'Failed to save item');
+      console.error('❌ Error saving item:', e);
+      console.error('❌ Error message:', e.message);
+      console.error('❌ Error details:', JSON.stringify(e, null, 2));
+      Alert.alert('Error', `Failed to save item: ${e.message || 'Unknown error'}`);
     }
   };
 
@@ -154,6 +253,56 @@ const AddItemScreen = ({ route, navigation }) => {
         placeholderTextColor={colors.placeholder}
       />
 
+      {/* Card Number field - only for card collections */}
+      {isCardCollection && (
+        <>
+          <Text style={[styles.label, { color: colors.text }]}>Card Number / Code</Text>
+          <TextInput
+            style={[styles.input, { 
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              color: colors.text
+            }]}
+            value={cardNumber}
+            onChangeText={setCardNumber}
+            placeholder="e.g., UGM1-014, PSA-123"
+            placeholderTextColor={colors.placeholder}
+            autoCapitalize="none"
+          />
+          <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+            🔍 Para cartas: introduce el numero o codigo unico
+          </Text>
+        </>
+      )}
+
+      {/* High Value Toggle */}
+      <View style={styles.highValueContainer}>
+        <View style={styles.highValueLabel}>
+          <Text style={[styles.label, { color: colors.text, marginBottom: 0 }]}>💎 Item de Alto Valor</Text>
+          <Text style={[styles.helperText, { color: colors.textSecondary, marginTop: 4 }]}>
+            Marca items que han aumentado significativamente de valor
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.toggleButton,
+            { 
+              backgroundColor: highValue ? colors.gold : colors.border,
+              borderColor: highValue ? colors.goldDark : colors.border,
+            }
+          ]}
+          onPress={() => setHighValue(!highValue)}
+          activeOpacity={0.7}
+        >
+          <Text style={[
+            styles.toggleButtonText,
+            { color: highValue ? '#000' : colors.textSecondary }
+          ]}>
+            {highValue ? '✓ SÍ' : 'NO'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={[styles.label, { color: colors.text }]}>Description</Text>
       <TextInput
         style={[styles.input, { 
@@ -168,6 +317,62 @@ const AddItemScreen = ({ route, navigation }) => {
         placeholder="Description"
         placeholderTextColor={colors.placeholder}
       />
+
+      {/* Kokeshi-specific fields */}
+      {isKokeshiCollection && (
+        <>
+          <Text style={[styles.label, { color: colors.text }]}>Autor</Text>
+          <TextInput
+            style={[styles.input, { 
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              color: colors.text
+            }]}
+            value={kokeshiAuthor}
+            onChangeText={setKokeshiAuthor}
+            placeholder="Nombre del artista"
+            placeholderTextColor={colors.placeholder}
+          />
+
+          <Text style={[styles.label, { color: colors.text }]}>Estilo</Text>
+          <View style={[styles.pickerContainer, { 
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+          }]}>
+            <Picker
+              selectedValue={kokeshiStyle}
+              onValueChange={setKokeshiStyle}
+              style={[styles.picker, { color: colors.text }]}
+              dropdownIconColor={colors.text}
+            >
+              <Picker.Item label="Seleccionar estilo..." value="" />
+              {kokeshiStyles.map(style => (
+                <Picker.Item key={style} label={style} value={style} />
+              ))}
+            </Picker>
+          </View>
+        </>
+      )}
+
+      {/* Height field for kokeshi and mingei */}
+      {needsHeightField && (
+        <>
+          <Text style={[styles.label, { color: colors.text }]}>Altura (cm)</Text>
+          <TextInput
+            style={[styles.input, { 
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              color: colors.text
+            }]}
+            value={itemHeight}
+            onChangeText={setItemHeight}
+            placeholder="Ej: 15.5"
+            placeholderTextColor={colors.placeholder}
+            keyboardType="decimal-pad"
+          />
+          <Text style={[styles.helperText, { color: colors.textSecondary }]}>📏 Altura del item en centímetros</Text>
+        </>
+      )}
 
       <Text style={[styles.label, { color: colors.text }]}>Images</Text>
       <View style={styles.imageButtons}>
@@ -238,18 +443,14 @@ const AddItemScreen = ({ route, navigation }) => {
       
       <TagSelector selectedTags={tags} onTagsChange={setTags} />
 
-      <Text style={[styles.label, { color: colors.text }]}>Price</Text>
-      <TextInput
-        style={[styles.input, { 
-          borderColor: colors.border,
-          backgroundColor: colors.card,
-          color: colors.text
-        }]}
+      <PriceInput
+        label="Purchase Price"
         value={price}
-        onChangeText={setPrice}
+        onValueChange={setPrice}
+        currency={currency}
+        onCurrencyChange={setCurrency}
         placeholder="Enter purchase price"
-        placeholderTextColor={colors.placeholder}
-        keyboardType="numeric"
+        required={false}
       />
 
       <Text style={[styles.label, { color: colors.text }]}>eBay Search Terms (Optional)</Text>
@@ -283,17 +484,38 @@ const AddItemScreen = ({ route, navigation }) => {
       />
 
       <Text style={[styles.label, { color: colors.text }]}>Condition</Text>
-      <TextInput
-        style={[styles.input, { 
+      <TouchableOpacity
+        style={[styles.selectorButton, { 
           borderColor: colors.border,
           backgroundColor: colors.card,
-          color: colors.text
         }]}
-        value={condition}
-        onChangeText={setCondition}
-        placeholder="New, Used, Mint, etc."
-        placeholderTextColor={colors.placeholder}
-      />
+        onPress={() => setShowConditionSelector(true)}
+      >
+        {condition ? (
+          <View style={styles.selectedConditionContainer}>
+            {(() => {
+              const conditionData = getConditionById(condition);
+              return conditionData ? (
+                <>
+                  <View style={[styles.conditionColorDot, { backgroundColor: conditionData.color }]} />
+                  <Text style={[styles.selectedConditionText, { color: colors.text }]}>
+                    {conditionData.label}
+                  </Text>
+                </>
+              ) : (
+                <Text style={[styles.placeholderText, { color: colors.placeholder }]}>
+                  {condition}
+                </Text>
+              );
+            })()}
+          </View>
+        ) : (
+          <Text style={[styles.placeholderText, { color: colors.placeholder }]}>
+            Seleccionar condición...
+          </Text>
+        )}
+        <Text style={[styles.selectorArrow, { color: colors.textSecondary }]}>▼</Text>
+      </TouchableOpacity>
 
       <Text style={[styles.label, { color: colors.text }]}>Additional Notes</Text>
       <TextInput
@@ -316,6 +538,14 @@ const AddItemScreen = ({ route, navigation }) => {
       >
         <Text style={styles.saveButtonText}>Save Item</Text>
       </TouchableOpacity>
+
+      {/* Condition Selector Modal */}
+      <ConditionSelector
+        visible={showConditionSelector}
+        onClose={() => setShowConditionSelector(false)}
+        onSelect={setCondition}
+        selectedCondition={condition}
+      />
     </ScrollView>
   );
 };
@@ -336,6 +566,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     marginTop: 6,
+    marginBottom: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
@@ -382,6 +613,41 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 12,
     fontStyle: 'italic',
+  },
+  helperText: {
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  highValueContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  highValueLabel: {
+    flex: 1,
+    marginRight: 12,
+  },
+  toggleButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 2,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   imagesListContainer: {
     marginTop: 16,
@@ -435,6 +701,46 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 4,
     marginBottom: 8,
+  },
+  selectorButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    fontSize: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectedConditionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  conditionColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  selectedConditionText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  placeholderText: {
+    fontSize: 14,
+  },
+  selectorArrow: {
+    fontSize: 12,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
   },
 });
 

@@ -11,11 +11,10 @@ import {
   StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import CollectionItem from '../components/CollectionItem';
 import SortModal from '../components/SortModal';
-import ThemeToggle from '../components/ThemeToggle';
 import CollectionStats from '../components/CollectionStats';
+import CategoryFilter from '../components/CategoryFilter';
 import { useTheme } from '../theme/theme';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -28,45 +27,51 @@ import {
   CloudIcon
 } from '../components/AppIcons';
 import { Ionicons } from '@expo/vector-icons';
-
-// Storage key with user ID to separate data by user
-const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
+import { 
+  getCollections, 
+  deleteCollection as deleteCollectionDB, 
+  getItemCountsByCollection,
+  getTotalValueByCollection 
+} from '../utils/database';
 
 const HomeScreen = ({ navigation }) => {
   const { theme, colors, styles: themeStyles } = useTheme();
   const { user } = useAuth();
   const [collections, setCollections] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc');
   const [showSortModal, setShowSortModal] = useState(false);
   const [totalItems, setTotalItems] = useState({});
+  const [collectionTotals, setCollectionTotals] = useState({}); // Total invertido por colección
   const [loading, setLoading] = useState(true);
   const [showStats, setShowStats] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
 
   useEffect(() => {
     const loadCollections = async () => {
       setLoading(true);
       try {
-        const storageKey = getStorageKey(user?.id);
-        const json = await AsyncStorage.getItem(storageKey);
-        setCollections(json ? JSON.parse(json) : []);
-        
-        // Load item counts for each collection
-        const itemCounts = {};
-        const collectionList = json ? JSON.parse(json) : [];
-        
-        for (const collection of collectionList) {
-          // Include user ID in item storage key
-          const itemStorageKey = `${user?.id || 'guest'}_${collection.id}`;
-          const itemsJson = await AsyncStorage.getItem(itemStorageKey);
-          const items = itemsJson ? JSON.parse(itemsJson) : [];
-          itemCounts[collection.id] = items.length;
+        if (!user?.id) {
+          Alert.alert('Error', 'Please sign in to view your collections');
+          setLoading(false);
+          return;
         }
+
+        // Cargar colecciones desde Supabase
+        const collectionsData = await getCollections(user.id);
+        setCollections(collectionsData);
+        
+        // Cargar contadores de items y valores totales
+        const itemCounts = await getItemCountsByCollection(user.id);
+        const totals = await getTotalValueByCollection(user.id);
         
         setTotalItems(itemCounts);
+        setCollectionTotals(totals);
       } catch (e) {
-        Alert.alert('Error', 'Failed to load collections');
+        console.error('Error loading collections:', e);
+        Alert.alert('Error', 'Failed to load collections from database');
       } finally {
         setLoading(false);
       }
@@ -77,10 +82,13 @@ const HomeScreen = ({ navigation }) => {
     return unsubscribe;
   }, [navigation, user?.id]);
   
-  // Filter collections based on search query
-  const filteredCollections = collections.filter(collection => 
-    collection.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter collections based on search query and categories
+  const filteredCollections = collections.filter(collection => {
+    const matchesSearch = collection.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategories.length === 0 || 
+                           selectedCategories.includes(collection.category || 'other');
+    return matchesSearch && matchesCategory;
+  });
   
   // Sort collections based on sortBy and sortOrder
   const sortedCollections = [...filteredCollections].sort((a, b) => {
@@ -101,7 +109,7 @@ const HomeScreen = ({ navigation }) => {
     }
   });
 
-  const deleteCollection = (id) => {
+  const handleDeleteCollection = (id) => {
     Alert.alert(
       'Delete Collection',
       'Are you sure you want to delete this collection? All items inside will be lost.',
@@ -112,17 +120,21 @@ const HomeScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Eliminar colección de la lista
-              const filtered = collections.filter((c) => c.id !== id);
-              const storageKey = getStorageKey(user?.id);
-              await AsyncStorage.setItem(storageKey, JSON.stringify(filtered));
-              
-              // También elimina los items guardados bajo la key con id de colección
-              const itemStorageKey = `${user?.id || 'guest'}_${id}`;
-              await AsyncStorage.removeItem(itemStorageKey);
+              if (!user?.id) {
+                Alert.alert('Error', 'Please sign in to delete collections');
+                return;
+              }
 
+              // Eliminar de Supabase
+              await deleteCollectionDB(id, user.id);
+              
+              // Actualizar estado local
+              const filtered = collections.filter((c) => c.id !== id);
               setCollections(filtered);
+              
+              Alert.alert('Success', 'Collection deleted successfully');
             } catch (e) {
+              console.error('Error deleting collection:', e);
               Alert.alert('Error', 'Failed to delete collection');
             }
           },
@@ -145,24 +157,63 @@ const HomeScreen = ({ navigation }) => {
     setShowSortModal(false);
   };
 
-  const renderItem = ({ item }) => (
-    <CollectionItem
-      collection={item}
-      itemCount={totalItems[item.id] || 0}
-      onPress={() =>
-        navigation.navigate('Collection', {
-          collectionId: item.id,
-          collectionName: item.name,
-        })
-      }
-      onEdit={() =>
-        navigation.navigate('EditCollection', {
-          collectionId: item.id,
-        })
-      }
-      onDelete={() => deleteCollection(item.id)}
-    />
-  );
+  const renderItem = ({ item }) => {
+    // Vista de rejilla (grid) - tarjeta compacta
+    if (viewMode === 'grid') {
+      return (
+        <View style={styles.gridItem}>
+          <TouchableOpacity
+            style={[styles.gridCard, { backgroundColor: colors.card }]}
+            onPress={() =>
+              navigation.navigate('Collection', {
+                collectionId: item.id,
+                collectionName: item.name,
+              })
+            }
+          >
+            {item.image ? (
+              <View style={styles.gridImageContainer}>
+                <View style={[styles.gridImageOverlay, { backgroundColor: item.color || colors.primary }]} />
+              </View>
+            ) : (
+              <View style={[styles.gridPlaceholder, { backgroundColor: item.color || colors.primary }]}>
+                <Ionicons name={item.icon || 'albums-outline'} size={32} color="#fff" />
+              </View>
+            )}
+            <View style={styles.gridInfo}>
+              <Text style={[styles.gridName, { color: colors.text }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <Text style={[styles.gridCount, { color: colors.textSecondary }]}>
+                {totalItems[item.id] || 0} items
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Vista de lista - tarjeta detallada (por defecto)
+    return (
+      <CollectionItem
+        collection={item}
+        itemCount={totalItems[item.id] || 0}
+        totalInvested={collectionTotals[item.id] || 0}
+        onPress={() =>
+          navigation.navigate('Collection', {
+            collectionId: item.id,
+            collectionName: item.name,
+          })
+        }
+        onEdit={() =>
+          navigation.navigate('EditCollection', {
+            collectionId: item.id,
+          })
+        }
+        onDelete={() => handleDeleteCollection(item.id)}
+      />
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -185,7 +236,7 @@ const HomeScreen = ({ navigation }) => {
             {/* User profile button moved to header */}
             <TouchableOpacity 
               style={styles.profileButton}
-              onPress={() => navigation.navigate('Profile')}
+              onPress={() => navigation.navigate('UserProfile', { userId: user?.id })}
             >
               <ProfileIcon color="#FFFFFF" size={24} />
             </TouchableOpacity>
@@ -232,13 +283,15 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.actionButtonText}>Cloud Sync</Text>
           </TouchableOpacity>
         </View>
-        
-        <View style={styles.actionButtonsRow}>
-          <ThemeToggle containerStyle={styles.themeToggleFullWidth} />
-        </View>
       </View>
       
       <CollectionStats visible={showStats} />
+      
+      <CategoryFilter
+        selectedCategories={selectedCategories}
+        onCategoryToggle={setSelectedCategories}
+        style={{ marginBottom: 8 }}
+      />
       
       <View style={styles.searchContainer}>
         <View style={[styles.searchInputContainer, { 
@@ -257,6 +310,16 @@ const HomeScreen = ({ navigation }) => {
           />
         </View>
         <TouchableOpacity 
+          style={[styles.viewModeButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+        >
+          <Ionicons 
+            name={viewMode === 'list' ? 'grid-outline' : 'list-outline'} 
+            size={20} 
+            color={colors.text} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity 
           style={[styles.sortButton, { backgroundColor: colors.primary }]}
           onPress={() => setShowSortModal(true)}
         >
@@ -268,25 +331,36 @@ const HomeScreen = ({ navigation }) => {
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
       ) : (
         <FlatList
+          style={{ flex: 1 }}
           data={sortedCollections}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: 80 }}
+          numColumns={viewMode === 'grid' ? 2 : 1}
+          key={viewMode} // Force re-render when changing columns
+          contentContainerStyle={{ 
+            paddingBottom: showStats ? 120 : 80,
+            paddingHorizontal: viewMode === 'grid' ? 8 : 0
+          }}
+          columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : null}
           ListEmptyComponent={
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {searchQuery ? 'No collections match your search' : 'No collections yet.'}
+              {searchQuery || selectedCategories.length > 0 
+                ? 'No collections match your filters' 
+                : 'No collections yet.'}
             </Text>
           }
         />
       )}
       
-      <TouchableOpacity 
-        style={[styles.addButton, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('AddCollection')}
-      >
-        <AddIcon color="#FFFFFF" size={24} style={styles.addButtonIcon} />
-        <Text style={styles.addButtonText}>Add New Collection</Text>
-      </TouchableOpacity>
+      {!showStats && (
+        <TouchableOpacity 
+          style={[styles.addButton, { backgroundColor: colors.primary }]}
+          onPress={() => navigation.navigate('AddCollection')}
+        >
+          <AddIcon color="#FFFFFF" size={24} style={styles.addButtonIcon} />
+          <Text style={styles.addButtonText}>Add New Collection</Text>
+        </TouchableOpacity>
+      )}
       
       <SortModal
         visible={showSortModal}
@@ -406,6 +480,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
   },
+  viewModeButton: {
+    borderRadius: 12,
+    width: 48,
+    height: 48,
+    marginLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
   sortButton: {
     borderRadius: 12,
     width: 48,
@@ -418,6 +506,51 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
+  },
+  // Grid view styles
+  gridRow: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  gridItem: {
+    width: '48%',
+    marginBottom: 16,
+  },
+  gridCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  gridImageContainer: {
+    width: '100%',
+    height: 120,
+    position: 'relative',
+  },
+  gridImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.85,
+  },
+  gridPlaceholder: {
+    width: '100%',
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gridInfo: {
+    padding: 12,
+  },
+  gridName: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  gridCount: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   emptyText: {
     textAlign: 'center',

@@ -11,35 +11,71 @@ import {
   Platform,
   TouchableOpacity,
   FlatList,
+  KeyboardAvoidingView,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { Picker } from '@react-native-picker/picker';
 import TagSelector from '../components/TagSelector';
+import ConditionSelector from '../components/ConditionSelector';
 import ImageGallery from '../components/ImageGallery';
 import FullscreenImageViewer from '../components/FullscreenImageViewer';
+import PriceInput from '../components/PriceInput';
 import { useTheme } from '../theme/theme';
 import { useAuth } from '../context/AuthContext';
 import { CameraIcon, GalleryIcon, DeleteIcon, AddIcon } from '../components/AppIcons';
-
-// Helper function to get item storage key with user ID
-const getItemStorageKey = (userId, collectionId) => `${userId || 'guest'}_${collectionId}`;
+import { DEFAULT_CURRENCY, formatCurrency } from '../utils/currencyUtils';
+import { getConditionById } from '../utils/conditionStates';
+import { updateItem, getCollectionById } from '../utils/database';
 
 const EditItemScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { collectionId, item } = route.params;
 
+  const [collection, setCollection] = useState(null);
   const [name, setName] = useState(item.name);
+  const [cardNumber, setCardNumber] = useState(item.card_number || '');
   const [description, setDescription] = useState(item.description || '');
   const [images, setImages] = useState(item.images || (item.image ? [item.image] : []));
   const [price, setPrice] = useState(item.price || item.purchase_price || '');
+  const [currency, setCurrency] = useState(item.currency || item.purchase_currency || DEFAULT_CURRENCY);
+  const [highValue, setHighValue] = useState(item.high_value || false);
   const [ebaySearchTerms, setEbaySearchTerms] = useState(item.ebay_search_terms || '');
-  const [purchaseDate, setPurchaseDate] = useState(item.purchaseDate || '');
+  const [purchaseDate, setPurchaseDate] = useState(item.purchase_date || '');
   const [condition, setCondition] = useState(item.condition || '');
   const [notes, setNotes] = useState(item.notes || '');
   const [tags, setTags] = useState(item.tags || []);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [fullscreenIndex, setFullscreenIndex] = useState(0);
+  const [showConditionSelector, setShowConditionSelector] = useState(false);
+  
+  // Custom fields
+  const [kokeshiAuthor, setKokeshiAuthor] = useState(item.custom_fields?.author || '');
+  const [kokeshiStyle, setKokeshiStyle] = useState(item.custom_fields?.style || '');
+  const [itemHeight, setItemHeight] = useState(item.custom_fields?.height || '');
+
+  // Kokeshi styles options
+  const kokeshiStyles = [
+    'Naruko', 'Tsuchiyu', 'Tōgatta', 'Yajirō', 'Sakunami', 
+    'Hijiori', 'Zaō', 'Nambu', 'Kijiyama', 'Tsugaru', 
+    'Nakanosawa', 'Tokyo', 'Desconocido'
+  ];
+
+  // Load collection to check category
+  useEffect(() => {
+    const loadCollection = async () => {
+      if (user?.id && collectionId) {
+        const col = await getCollectionById(collectionId, user.id);
+        setCollection(col);
+      }
+    };
+    loadCollection();
+  }, [user?.id, collectionId]);
+
+  // Check collection categories
+  const isKokeshiCollection = collection?.category === 'kokeshi';
+  const isMingeiCollection = collection?.category === 'mingei';
+  const needsHeightField = isKokeshiCollection || isMingeiCollection;
 
   // Request permissions for camera and gallery
   const requestPermissions = async () => {
@@ -107,42 +143,66 @@ const EditItemScreen = ({ route, navigation }) => {
       Alert.alert('Validation', 'Name is required');
       return;
     }
+    
+    if (!user?.id) {
+      Alert.alert('Error', 'Please sign in to update items');
+      return;
+    }
+    
     try {
-      const itemStorageKey = getItemStorageKey(user?.id, collectionId);
-      const existing = await AsyncStorage.getItem(itemStorageKey);
-      const items = existing ? JSON.parse(existing) : [];
-      const updatedItems = items.map((i) =>
-        i.id === item.id ? { 
-          ...i, 
-          name, 
-          description, 
-          images,
-          // Keep image field for backward compatibility
-          image: images.length > 0 ? images[0] : '',
-          price,
-          purchase_price: price, // Update purchase price
-          ebay_search_terms: ebaySearchTerms, // Update eBay search terms
-          // Preserve existing price tracking data
-          current_market_price: i.current_market_price || null,
-          price_history: i.price_history || [],
-          last_price_update: i.last_price_update || null,
-          purchaseDate,
-          condition,
-          notes,
-          tags,
-          userId: user?.id || 'guest',
-          updatedAt: new Date().toISOString()
-        } : i
-      );
-      await AsyncStorage.setItem(itemStorageKey, JSON.stringify(updatedItems));
+      // Build custom_fields based on collection category
+      const customFields = {};
+      if (isKokeshiCollection) {
+        if (kokeshiAuthor) customFields.author = kokeshiAuthor;
+        if (kokeshiStyle) customFields.style = kokeshiStyle;
+      }
+      if (needsHeightField && itemHeight) {
+        customFields.height = itemHeight;
+      }
+
+      const updatedItem = {
+        name, 
+        card_number: cardNumber.trim().toUpperCase(),
+        description, 
+        images,
+        image: images.length > 0 ? images[0] : '',
+        price,
+        purchase_price: price,
+        currency: currency,
+        purchase_currency: currency,
+        ebay_search_terms: ebaySearchTerms,
+        high_value: highValue,
+        // Preserve existing price tracking data
+        current_market_price: item.current_market_price || null,
+        current_market_currency: item.current_market_currency || null,
+        price_history: item.price_history || [],
+        last_price_update: item.last_price_update || null,
+        purchase_date: purchaseDate,
+        condition,
+        notes,
+        tags,
+        custom_fields: customFields,
+      };
+      
+      await updateItem(item.id, user.id, updatedItem);
+      Alert.alert('Success', 'Item updated successfully');
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', 'Failed to save item');
+      console.error('Error saving item:', e);
+      Alert.alert('Error', 'Failed to update item');
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView 
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <ScrollView 
+        contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
+        keyboardShouldPersistTaps="handled"
+      >
       <Text style={[styles.label, { color: colors.text }]}>Name*</Text>
       <TextInput
         style={[styles.input, { 
@@ -155,6 +215,51 @@ const EditItemScreen = ({ route, navigation }) => {
         placeholder="Item Name"
         placeholderTextColor={colors.placeholder}
       />
+
+      <Text style={[styles.label, { color: colors.text }]}>Card Number / Code</Text>
+      <TextInput
+        style={[styles.input, { 
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          color: colors.text
+        }]}
+        value={cardNumber}
+        onChangeText={setCardNumber}
+        placeholder="e.g., UGM1-014, PSA-123"
+        placeholderTextColor={colors.placeholder}
+        autoCapitalize="characters"
+      />
+      <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+        🔍 Para cartas: introduce el numero o codigo unico
+      </Text>
+
+      {/* High Value Toggle */}
+      <View style={styles.highValueContainer}>
+        <View style={styles.highValueLabel}>
+          <Text style={[styles.label, { color: colors.text, marginBottom: 0 }]}>💎 Item de Alto Valor</Text>
+          <Text style={[styles.helperText, { color: colors.textSecondary, marginTop: 4 }]}>
+            Marca items que han aumentado significativamente de valor
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.toggleButton,
+            { 
+              backgroundColor: highValue ? colors.gold : colors.border,
+              borderColor: highValue ? colors.goldDark : colors.border,
+            }
+          ]}
+          onPress={() => setHighValue(!highValue)}
+          activeOpacity={0.7}
+        >
+          <Text style={[
+            styles.toggleButtonText,
+            { color: highValue ? '#000' : colors.textSecondary }
+          ]}>
+            {highValue ? '✓ SÍ' : 'NO'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={[styles.label, { color: colors.text }]}>Description</Text>
       <TextInput
@@ -170,6 +275,62 @@ const EditItemScreen = ({ route, navigation }) => {
         placeholder="Description"
         placeholderTextColor={colors.placeholder}
       />
+
+      {/* Kokeshi-specific fields */}
+      {isKokeshiCollection && (
+        <>
+          <Text style={[styles.label, { color: colors.text }]}>Autor</Text>
+          <TextInput
+            style={[styles.input, { 
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              color: colors.text
+            }]}
+            value={kokeshiAuthor}
+            onChangeText={setKokeshiAuthor}
+            placeholder="Nombre del artista"
+            placeholderTextColor={colors.placeholder}
+          />
+
+          <Text style={[styles.label, { color: colors.text }]}>Estilo</Text>
+          <View style={[styles.pickerContainer, { 
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+          }]}>
+            <Picker
+              selectedValue={kokeshiStyle}
+              onValueChange={setKokeshiStyle}
+              style={[styles.picker, { color: colors.text }]}
+              dropdownIconColor={colors.text}
+            >
+              <Picker.Item label="Seleccionar estilo..." value="" />
+              {kokeshiStyles.map(style => (
+                <Picker.Item key={style} label={style} value={style} />
+              ))}
+            </Picker>
+          </View>
+        </>
+      )}
+
+      {/* Height field for kokeshi and mingei */}
+      {needsHeightField && (
+        <>
+          <Text style={[styles.label, { color: colors.text }]}>Altura (cm)</Text>
+          <TextInput
+            style={[styles.input, { 
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              color: colors.text
+            }]}
+            value={itemHeight}
+            onChangeText={setItemHeight}
+            placeholder="Ej: 15.5"
+            placeholderTextColor={colors.placeholder}
+            keyboardType="decimal-pad"
+          />
+          <Text style={[styles.helperText, { color: colors.textSecondary }]}>📏 Altura del item en centímetros</Text>
+        </>
+      )}
 
       <Text style={[styles.label, { color: colors.text }]}>Images</Text>
       <View style={styles.imageButtons}>
@@ -239,18 +400,14 @@ const EditItemScreen = ({ route, navigation }) => {
       
       <TagSelector selectedTags={tags} onTagsChange={setTags} />
 
-      <Text style={[styles.label, { color: colors.text }]}>Price</Text>
-      <TextInput
-        style={[styles.input, { 
-          borderColor: colors.border,
-          backgroundColor: colors.card,
-          color: colors.text
-        }]}
+      <PriceInput
+        label="Purchase Price"
         value={price}
-        onChangeText={setPrice}
+        onValueChange={setPrice}
+        currency={currency}
+        onCurrencyChange={setCurrency}
         placeholder="Enter purchase price"
-        placeholderTextColor={colors.placeholder}
-        keyboardType="numeric"
+        required={false}
       />
 
       <Text style={[styles.label, { color: colors.text }]}>eBay Search Terms (Optional)</Text>
@@ -268,7 +425,7 @@ const EditItemScreen = ({ route, navigation }) => {
       />
       {item.current_market_price && (
         <Text style={[styles.marketPriceInfo, { color: colors.success }]}>
-          📈 Current market price: ${item.current_market_price}
+          📈 Current market price: {formatCurrency(item.current_market_price, item.current_market_currency)}
           {item.last_price_update && ` (updated ${new Date(item.last_price_update).toLocaleDateString()})`}
         </Text>
       )}
@@ -290,17 +447,38 @@ const EditItemScreen = ({ route, navigation }) => {
       />
 
       <Text style={[styles.label, { color: colors.text }]}>Condition</Text>
-      <TextInput
-        style={[styles.input, { 
+      <TouchableOpacity
+        style={[styles.selectorButton, { 
           borderColor: colors.border,
           backgroundColor: colors.card,
-          color: colors.text
         }]}
-        value={condition}
-        onChangeText={setCondition}
-        placeholder="New, Used, Mint, etc."
-        placeholderTextColor={colors.placeholder}
-      />
+        onPress={() => setShowConditionSelector(true)}
+      >
+        {condition ? (
+          <View style={styles.selectedConditionContainer}>
+            {(() => {
+              const conditionData = getConditionById(condition);
+              return conditionData ? (
+                <>
+                  <View style={[styles.conditionColorDot, { backgroundColor: conditionData.color }]} />
+                  <Text style={[styles.selectedConditionText, { color: colors.text }]}>
+                    {conditionData.label}
+                  </Text>
+                </>
+              ) : (
+                <Text style={[styles.placeholderText, { color: colors.placeholder }]}>
+                  {condition}
+                </Text>
+              );
+            })()}
+          </View>
+        ) : (
+          <Text style={[styles.placeholderText, { color: colors.placeholder }]}>
+            Seleccionar condición...
+          </Text>
+        )}
+        <Text style={[styles.selectorArrow, { color: colors.textSecondary }]}>▼</Text>
+      </TouchableOpacity>
 
       <Text style={[styles.label, { color: colors.text }]}>Additional Notes</Text>
       <TextInput
@@ -323,9 +501,18 @@ const EditItemScreen = ({ route, navigation }) => {
       >
         <Text style={styles.saveButtonText}>Save Changes</Text>
       </TouchableOpacity>
+
+      {/* Condition Selector Modal */}
+      <ConditionSelector
+        visible={showConditionSelector}
+        onClose={() => setShowConditionSelector(false)}
+        onSelect={setCondition}
+        selectedCondition={condition}
+      />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -343,6 +530,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     marginTop: 6,
+    marginBottom: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
@@ -389,6 +577,41 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 12,
     fontStyle: 'italic',
+  },
+  helperText: {
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  highValueContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  highValueLabel: {
+    flex: 1,
+    marginRight: 12,
+  },
+  toggleButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 2,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   imagesListContainer: {
     marginTop: 16,
@@ -448,6 +671,46 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
     marginBottom: 4,
+  },
+  selectorButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    fontSize: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectedConditionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  conditionColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  selectedConditionText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  placeholderText: {
+    fontSize: 14,
+  },
+  selectorArrow: {
+    fontSize: 12,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 6,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
   },
 });
 

@@ -5,6 +5,7 @@ import { useTheme } from '../theme/theme';
 import ImageGallery from './ImageGallery';
 import FullscreenImageViewer from './FullscreenImageViewer';
 import { EditIcon, DeleteIcon } from './AppIcons';
+import { formatCurrency } from '../utils/currencyUtils';
 
 /**
  * A modal component for displaying detailed information about an item
@@ -97,8 +98,24 @@ export default function ItemDetailModal({
             
             {item.price ? (
               <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: colors.text }]}>Price:</Text>
-                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>{item.price}</Text>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Purchase Price:</Text>
+                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>
+                  {formatCurrency(item.price, item.currency || item.purchase_currency)}
+                </Text>
+              </View>
+            ) : null}
+            
+            {item.current_market_price ? (
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: colors.text }]}>Market Price:</Text>
+                <Text style={[styles.detailValue, { color: colors.textSecondary }]}>
+                  {formatCurrency(item.current_market_price, item.current_market_currency)}
+                </Text>
+                {item.last_price_update && (
+                  <Text style={[styles.detailValue, { color: colors.textSecondary, fontSize: 12, fontStyle: 'italic' }]}>
+                    Updated: {new Date(item.last_price_update).toLocaleDateString()}
+                  </Text>
+                )}
               </View>
             ) : null}
             

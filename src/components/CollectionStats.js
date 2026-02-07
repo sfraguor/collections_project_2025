@@ -1,17 +1,11 @@
 // src/components/CollectionStats.js
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/theme';
 import { useAuth } from '../context/AuthContext';
 import { getCollectionPriceStats, batchUpdatePrices } from '../utils/priceHistoryService';
 import { formatCurrency, formatPercentChange, testEbayAPI } from '../utils/ebayPriceService';
-
-// Storage key with user ID to separate data by user
-const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
-
-// Helper function to get item storage key with user ID
-const getItemStorageKey = (userId, collectionId) => `${userId || 'guest'}_${collectionId}`;
+import { getUserStats, getCollections, getItems } from '../utils/database';
 
 /**
  * A component that displays statistics about the user's collections
@@ -50,10 +44,21 @@ export default function CollectionStats({ visible = true }) {
   const loadStats = async () => {
     setLoading(true);
     try {
-      // Load all collections
-      const storageKey = getStorageKey(user?.id);
-      const collectionsJson = await AsyncStorage.getItem(storageKey);
-      const collections = collectionsJson ? JSON.parse(collectionsJson) : [];
+      if (!user?.id) {
+        setStats({
+          totalCollections: 0,
+          totalItems: 0,
+          averageItemsPerCollection: 0,
+          mostItemsCollection: { name: '', count: 0 },
+          recentlyAdded: { name: '', date: null },
+          totalValue: 0,
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Cargar colecciones desde Supabase
+      const collections = await getCollections(user.id);
       
       if (collections.length === 0) {
         setStats({
@@ -77,10 +82,8 @@ export default function CollectionStats({ visible = true }) {
 
       // Process each collection
       for (const collection of collections) {
-        // Get items in this collection
-        const itemStorageKey = getItemStorageKey(user?.id, collection.id);
-        const itemsJson = await AsyncStorage.getItem(itemStorageKey);
-        const items = itemsJson ? JSON.parse(itemsJson) : [];
+        // Get items in this collection desde Supabase
+        const items = await getItems(collection.id, user.id);
         
         // Add items to global list for price tracking
         allItems.push(...items);
@@ -94,8 +97,8 @@ export default function CollectionStats({ visible = true }) {
         }
         
         // Check if this is the most recently added collection
-        const collectionDate = collection.createdAt 
-          ? new Date(collection.createdAt) 
+        const collectionDate = collection.created_at 
+          ? new Date(collection.created_at) 
           : null;
           
         if (collectionDate && (!recentlyAdded.date || collectionDate > recentlyAdded.date)) {
@@ -163,18 +166,18 @@ export default function CollectionStats({ visible = true }) {
   const updateAllPrices = async () => {
     setUpdating(true);
     try {
-      // Load all collections and items
-      const storageKey = getStorageKey(user?.id);
-      const collectionsJson = await AsyncStorage.getItem(storageKey);
-      const collections = collectionsJson ? JSON.parse(collectionsJson) : [];
+      if (!user?.id) {
+        return;
+      }
+
+      // Load all collections desde Supabase
+      const collections = await getCollections(user.id);
       
       for (const collection of collections) {
-        const itemStorageKey = getItemStorageKey(user?.id, collection.id);
-        const itemsJson = await AsyncStorage.getItem(itemStorageKey);
-        const items = itemsJson ? JSON.parse(itemsJson) : [];
+        const items = await getItems(collection.id, user.id);
         
         // Update prices for items that have eBay search terms
-        await batchUpdatePrices(user?.id, collection.id, items, (progress) => {
+        await batchUpdatePrices(user.id, collection.id, items, (progress) => {
           console.log(`Updating ${progress.currentItem}: ${progress.completed}/${progress.total}`);
         });
       }

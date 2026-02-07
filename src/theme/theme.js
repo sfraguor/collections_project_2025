@@ -22,6 +22,9 @@ const lightColors = {
   danger: '#EF4444', // Red
   warning: '#F59E0B', // Amber
   info: '#3B82F6', // Blue
+  gold: '#FFD700', // Gold for high value items
+  goldDark: '#FFA500', // Dark gold
+  goldLight: '#FFFACD', // Light gold
   disabled: '#D1D5DB',
   placeholder: '#9CA3AF',
   overlay: 'rgba(0, 0, 0, 0.5)',
@@ -47,6 +50,9 @@ const darkColors = {
   danger: '#EF4444', // Red
   warning: '#F59E0B', // Amber
   info: '#3B82F6', // Blue
+  gold: '#FFD700', // Gold for high value items
+  goldDark: '#FFA500', // Dark gold
+  goldLight: '#B8860B', // Dark gold brown for dark theme
   disabled: '#4B5563',
   placeholder: '#6B7280',
   overlay: 'rgba(0, 0, 0, 0.7)',

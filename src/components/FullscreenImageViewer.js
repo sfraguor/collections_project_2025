@@ -1,5 +1,5 @@
 // src/components/FullscreenImageViewer.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Modal, 
   View, 
@@ -31,6 +31,13 @@ export default function FullscreenImageViewer({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
+
+  // Update current index when initialIndex or visible changes
+  useEffect(() => {
+    if (visible) {
+      setCurrentIndex(initialIndex);
+    }
+  }, [initialIndex, visible]);
   
   if (!visible || !images || images.length === 0) return null;
   

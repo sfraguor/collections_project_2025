@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, Image, Platform, ScrollView, KeyboardAvoidingView, Switch } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, TextInput, Button, StyleSheet, Alert, Image, Platform, ScrollView, KeyboardAvoidingView, Switch, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import uuid from 'react-native-uuid';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../utils/supabase';
-
-// Storage key with user ID to separate data by user
-const getStorageKey = (userId) => `collections_${userId || 'guest'}`;
+import CategorySelector from '../components/CategorySelector';
+import { getCategoryById } from '../utils/categories';
+import { createCollection } from '../utils/database';
+import { uploadImage } from '../utils/imageUpload';
 
 const AddCollectionScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [name, setName] = useState('');
+  const [category, setCategory] = useState('other'); // Categoría por defecto
   const [imageUri, setImageUri] = useState(null); // URI local de la imagen de la colección
   const [isPublic, setIsPublic] = useState(true); // Por defecto público para facilitar descubrimiento
+  const [uploading, setUploading] = useState(false); // Estado de carga
 
   // pedir permisos para cámara y galería
   const requestPermissions = async () => {
@@ -68,59 +69,37 @@ const AddCollectionScreen = ({ navigation }) => {
       Alert.alert('Validation', 'Please enter a collection name');
       return;
     }
+    
+    if (!user?.id) {
+      Alert.alert('Error', 'Please sign in to create collections');
+      return;
+    }
+
     try {
-      const storageKey = getStorageKey(user?.id);
-      const json = await AsyncStorage.getItem(storageKey);
-      let collections = json ? JSON.parse(json) : [];
-
-      collections = collections.filter(c => typeof c.name === 'string');
-
-      if (collections.some((c) => c.name.toLowerCase() === name.trim().toLowerCase())) {
-        Alert.alert('Validation', 'A collection with this name already exists.');
-        return;
+      setUploading(true);
+      
+      // Si hay imagen local, subirla a Supabase Storage
+      let cloudImageUrl = null;
+      if (imageUri && imageUri.startsWith('file://')) {
+        console.log('Uploading image to Supabase Storage...');
+        cloudImageUrl = await uploadImage(imageUri, user.id, 'collection');
+        
+        if (!cloudImageUrl) {
+          Alert.alert('Warning', 'Failed to upload image, but collection will be created without it.');
+        }
       }
 
       const collectionId = uuid.v4();
       const newCollection = {
         id: collectionId,
         name: name.trim(),
-        image: imageUri || null, // URI de la imagen seleccionada
-        userId: user?.id || 'guest',
+        category: category,
+        image: cloudImageUrl || imageUri || null, // Usar URL de cloud si existe, sino URI local
         is_public: isPublic,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
       };
 
-      // Guardar en Supabase si hay usuario
-      if (user?.id) {
-        try {
-          const { data, error } = await supabase
-            .from('collections')
-            .insert({
-              id: collectionId,
-              name: name.trim(),
-              image: imageUri || null, // Solo usar 'image'
-              user_id: user.id,
-              is_public: isPublic,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (error) {
-            console.error('Supabase insert error:', error);
-          } else {
-            console.log('✅ Collection created in Supabase:', data);
-          }
-        } catch (supabaseError) {
-          console.error('Supabase error:', supabaseError);
-          // Continuar con AsyncStorage como fallback
-        }
-      }
-
-      collections.push(newCollection);
-      await AsyncStorage.setItem(storageKey, JSON.stringify(collections));
+      // Crear en Supabase
+      await createCollection(user.id, newCollection);
       
       Alert.alert(
         'Success!', 
@@ -130,6 +109,8 @@ const AddCollectionScreen = ({ navigation }) => {
     } catch (e) {
       console.error('Error saving collection:', e);
       Alert.alert('Error', 'Failed to save collection: ' + e.message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -145,6 +126,17 @@ const AddCollectionScreen = ({ navigation }) => {
           onChangeText={setName}
           autoCapitalize="words"
         />
+
+        {/* Category Selector */}
+        <View style={styles.categoryContainer}>
+          <Text style={styles.categoryLabel}>Categoría</Text>
+          <CategorySelector
+            selectedCategory={category}
+            onCategorySelect={setCategory}
+            placeholder="Seleccionar categoría"
+            style={styles.categorySelector}
+          />
+        </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
           <Button title="Take Photo" onPress={takePhoto} />
@@ -176,7 +168,14 @@ const AddCollectionScreen = ({ navigation }) => {
           />
         </View>
 
-        <Button title="Save Collection" onPress={saveCollection} />
+        {uploading ? (
+          <View style={styles.uploadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.uploadingText}>Uploading image...</Text>
+          </View>
+        ) : (
+          <Button title="Save Collection" onPress={saveCollection} />
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -192,6 +191,18 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 16,
     fontSize: 16,
+  },
+  categoryContainer: {
+    marginBottom: 20,
+  },
+  categoryLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  categorySelector: {
+    marginBottom: 0,
   },
   toggleContainer: {
     flexDirection: 'row',
@@ -218,6 +229,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+  },
+  uploadingContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  uploadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#007AFF',
   },
 });
 

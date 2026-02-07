@@ -2,6 +2,8 @@
 
 Esta aplicación permite gestionar tus colecciones personales (cartas, figuras, artbooks, etc.) con fotos, precios, etiquetas y detalles.
 
+ebay: daruma83-84
+
 ---
 
 ## Características
@@ -184,6 +186,15 @@ Para compilar la versión final para publicación en las tiendas:
 npm run build:prod  # Para Android e iOS
 ```
 
+### Compilacion standalone para android
+
+cd /Users/sfrag/Documents/Personal/Programacion/2025_projects/colecciones-v2/colecciones-app
+eas build --platform android --profile preview-local --local
+
+### Instalacion del apk generado
+
+adb uninstall com.sfrag.coleccionesapp && adb install /Users/sfrag/Documents/Personal/Programacion/2025_projects/colecciones-v2/colecciones-app/build-1767822504519.apk
+
 ### Solución de Problemas de Compilación
 
 Si encuentras problemas durante la compilación:
@@ -195,4 +206,37 @@ Si encuentras problemas durante la compilación:
 
 2. Verifica que las configuraciones en `eas.json` y `app.json` sean correctas
 3. Para problemas específicos de Android, revisa que los valores de SDK en `app.json` sean compatibles con tu proyecto
-4. Para errores de autolinking, asegúrate de que todas las dependencias nativas estén correctamente configuradas
+4. 3. Para errores de autolinking, asegúrate de que todas las dependencias nativas estén correctamente configuradas
+
+---
+
+## 🚀 eBay API Integration & Production Setup
+
+### eBay Price Tracking
+La aplicación incluye integración con la API de eBay para obtener precios de mercado de items:
+
+- **Sandbox Environment**: Configurado para desarrollo y testing
+- **Production Environment**: Configurado para uso real con datos de mercado
+- **Price Service**: Obtiene precios automáticamente basado en nombres de items
+- **API Status**: ✅ COMPLETAMENTE CONFIGURADO Y FUNCIONAL
+
+### Compliance Endpoint para eBay
+El proyecto incluye un endpoint de compliance para cumplir con los requisitos de eBay:
+
+**🔗 Endpoint URL:** https://collections-project-2025.vercel.app/api/ebay-endpoint
+
+**📋 Funcionalidades:**
+- ✅ Verificación automática de challenges de eBay
+- ✅ Procesamiento de notificaciones de eliminación de cuenta
+- ✅ Privacy Policy y Terms of Service integrados
+- ✅ Respuesta SHA-256 compatible con especificación oficial
+
+**📖 Documentación completa:** Ver `EBAY_DEPLOYMENT_DOCUMENTATION.md`
+
+### Deployment en Vercel
+- **Platform**: Vercel Serverless Functions
+- **Auto-deployment**: Conectado a GitHub para deploys automáticos
+- **SSL/HTTPS**: Configurado automáticamente
+- **Monitoring**: Logs disponibles en Vercel Dashboard
+
+---

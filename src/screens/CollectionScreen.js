@@ -12,13 +12,15 @@ import {
   StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import ItemCard from '../components/ItemCard';
+import ItemGridCard from '../components/ItemGridCard';
 import ItemDetailModal from '../components/ItemDetailModal';
+import PriceTrackingCard from '../components/PriceTrackingCard';
 import SortModal from '../components/SortModal';
 import ShareCollectionModal from '../components/ShareCollectionModal';
 import { useTheme } from '../theme/theme';
 import { useAuth } from '../context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 import { 
   AddIcon, 
   SortIcon, 
@@ -28,9 +30,7 @@ import {
   TagIcon,
   ClearIcon
 } from '../components/AppIcons';
-
-// Helper function to get item storage key with user ID
-const getItemStorageKey = (userId, collectionId) => `${userId || 'guest'}_${collectionId}`;
+import { getItems, deleteItem as deleteItemDB, updateItem } from '../utils/database';
 
 const CollectionScreen = ({ route, navigation }) => {
   const { theme, colors } = useTheme();
@@ -48,14 +48,21 @@ const CollectionScreen = ({ route, navigation }) => {
   const [availableTags, setAvailableTags] = useState([]);
   const [showTagFilter, setShowTagFilter] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showHighValueOnly, setShowHighValueOnly] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
 
   useEffect(() => {
     const loadItems = async () => {
       setLoading(true);
       try {
-        const itemStorageKey = getItemStorageKey(user?.id, collectionId);
-        const data = await AsyncStorage.getItem(itemStorageKey);
-        const itemsData = data ? JSON.parse(data) : [];
+        if (!user?.id) {
+          Alert.alert('Error', 'Please sign in to view items');
+          setLoading(false);
+          return;
+        }
+
+        // Cargar items desde Supabase
+        const itemsData = await getItems(collectionId, user.id);
         setItems(itemsData);
         
         // Extract all unique tags from items
@@ -67,7 +74,8 @@ const CollectionScreen = ({ route, navigation }) => {
         });
         setAvailableTags(Array.from(allTags));
       } catch (error) {
-        Alert.alert('Error', 'Failed to load items');
+        console.error('Error loading items:', error);
+        Alert.alert('Error', 'Failed to load items from database');
       } finally {
         setLoading(false);
       }
@@ -80,9 +88,15 @@ const CollectionScreen = ({ route, navigation }) => {
 
   // Filter items based on search query and selected tags
   const filteredItems = items.filter(item => {
-    // Text search filter
+    // Normalizar la búsqueda eliminando espacios y guiones para búsqueda más flexible
+    const normalizedQuery = searchQuery.toUpperCase().replace(/[\s-]/g, '');
+    const normalizedCardNumber = item.cardNumber ? item.cardNumber.toUpperCase().replace(/[\s-]/g, '') : '';
+    
+    // Text search filter - incluye busqueda por numero de carta
     const matchesSearch = 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.cardNumber && item.cardNumber.toUpperCase().includes(searchQuery.toUpperCase())) ||
+      (normalizedCardNumber && normalizedCardNumber.includes(normalizedQuery)) ||
       (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (item.condition && item.condition.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -91,7 +105,10 @@ const CollectionScreen = ({ route, navigation }) => {
     const matchesTags = selectedTags.length === 0 || 
       (item.tags && selectedTags.every(tag => item.tags.includes(tag)));
     
-    return matchesSearch && matchesTags;
+    // High value filter
+    const matchesHighValue = !showHighValueOnly || item.highValue === true;
+    
+    return matchesSearch && matchesTags && matchesHighValue;
   });
 
   // Sort items based on sortBy and sortOrder
@@ -118,17 +135,31 @@ const CollectionScreen = ({ route, navigation }) => {
     }
   });
 
-  const deleteItem = async (id) => {
-    const filtered = items.filter((i) => i.id !== id);
-    setItems(filtered);
-    const itemStorageKey = getItemStorageKey(user?.id, collectionId);
-    await AsyncStorage.setItem(itemStorageKey, JSON.stringify(filtered));
+  const handleDeleteItem = async (id) => {
+    try {
+      if (!user?.id) {
+        Alert.alert('Error', 'Please sign in to delete items');
+        return;
+      }
+
+      // Eliminar de Supabase
+      await deleteItemDB(id, user.id);
+      
+      // Actualizar estado local
+      const filtered = items.filter((i) => i.id !== id);
+      setItems(filtered);
+      
+      Alert.alert('Success', 'Item deleted successfully');
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      Alert.alert('Error', 'Failed to delete item');
+    }
   };
 
   const confirmDelete = (id) => {
     Alert.alert('Delete item', 'Are you sure you want to delete this item?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteItem(id) },
+      { text: 'Delete', style: 'destructive', onPress: () => handleDeleteItem(id) },
     ]);
   };
 
@@ -137,14 +168,57 @@ const CollectionScreen = ({ route, navigation }) => {
     setShowItemModal(true);
   };
 
-  const renderItem = ({ item }) => (
-    <ItemCard
-      item={item}
-      onPress={() => viewItemDetails(item)}
-      onEdit={() => navigation.navigate('EditItem', { collectionId, item })}
-      onDelete={() => confirmDelete(item.id)}
-    />
-  );
+  const renderItem = ({ item }) => {
+    // Grid view - compact card
+    if (viewMode === 'grid') {
+      return (
+        <View style={styles.gridItem}>
+          <ItemGridCard
+            item={item}
+            onPress={() => viewItemDetails(item)}
+          />
+        </View>
+      );
+    }
+    
+    // List view - detailed card
+    console.log('🔍 Rendering item:', item.name, 'eBay terms:', item.ebay_search_terms);
+    
+    return (
+      <View style={{ marginBottom: 8 }}>
+        <ItemCard
+          item={item}
+          onPress={() => viewItemDetails(item)}
+          onEdit={() => navigation.navigate('EditItem', { collectionId, item })}
+          onDelete={() => confirmDelete(item.id)}
+        />
+        
+        {/* Debug info card - temporary */}
+        <View style={{ 
+          backgroundColor: '#f0f0f0', 
+          padding: 8, 
+          margin: 4, 
+          borderRadius: 4 
+        }}>
+          <Text style={{ fontSize: 12, color: '#666' }}>
+            🔍 Debug: eBay terms = "{item.ebay_search_terms || 'NO TERMS'}"
+          </Text>
+          <Text style={{ fontSize: 12, color: '#666' }}>
+            Show tracking: {item.ebay_search_terms && item.ebay_search_terms.trim() ? 'YES' : 'NO'}
+          </Text>
+        </View>
+        
+        {/* Show price tracking card if eBay search terms exist */}
+        {item.ebay_search_terms && item.ebay_search_terms.trim() && (
+          <PriceTrackingCard
+            item={item}
+            collectionId={collectionId}
+            onItemUpdated={handleItemUpdated}
+          />
+        )}
+      </View>
+    );
+  };
 
   // Sort options for the SortModal component
   const sortOptions = [
@@ -177,12 +251,83 @@ const CollectionScreen = ({ route, navigation }) => {
     confirmDelete(selectedItem.id);
   };
 
+  // Handle item price update from PriceTrackingCard
+  const handleItemUpdated = async (updatedItem) => {
+    try {
+      if (!user?.id) {
+        console.error('No user ID available');
+        return;
+      }
+
+      // Actualizar en Supabase
+      await updateItem(updatedItem.id, user.id, updatedItem);
+      
+      // Actualizar estado local
+      const updatedItems = items.map(item => 
+        item.id === updatedItem.id ? updatedItem : item
+      );
+      
+      setItems(updatedItems);
+      
+      // Update selected item if it's the same one
+      if (selectedItem && selectedItem.id === updatedItem.id) {
+        setSelectedItem(updatedItem);
+      }
+    } catch (error) {
+      console.error('Error updating item:', error);
+      Alert.alert('Error', 'Failed to update item');
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar
         barStyle={theme === 'dark' ? 'light-content' : 'dark-content'}
         backgroundColor={colors.background}
       />
+      
+      {/* Items Counter */}
+      <View style={[styles.itemsCounterContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.counterInfoContainer}>
+          <Text style={[styles.itemsCounterText, { color: colors.text }]}>
+            {filteredItems.length === items.length 
+              ? `📦 ${items.length} ${items.length === 1 ? 'item' : 'items'} en total`
+              : `📦 ${filteredItems.length} de ${items.length} ${items.length === 1 ? 'item' : 'items'}`
+            }
+          </Text>
+          {(() => {
+            const totalInvested = items.reduce((sum, item) => {
+              const price = parseFloat(item.price || item.purchase_price || 0);
+              return sum + price;
+            }, 0);
+            
+            if (totalInvested > 0) {
+              return (
+                <View style={styles.totalInvestedContainer}>
+                  <Ionicons name="cash" size={16} color={colors.success} style={styles.cashIcon} />
+                  <Text style={[styles.totalInvestedText, { color: colors.success }]}>
+                    Total invertido: {totalInvested.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  </Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
+        </View>
+        {filteredItems.length !== items.length && (
+          <TouchableOpacity 
+            onPress={() => {
+              setSearchQuery('');
+              setSelectedTags([]);
+              setShowHighValueOnly(false);
+            }}
+            style={[styles.clearFiltersButton, { backgroundColor: colors.primary }]}
+          >
+            <Text style={styles.clearFiltersButtonText}>Limpiar filtros</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       <View style={styles.headerActions}>
         <LinearGradient
           colors={[colors.secondary, colors.secondaryLight]}
@@ -209,7 +354,7 @@ const CollectionScreen = ({ route, navigation }) => {
               style={[styles.searchInput, { 
                 color: colors.text
               }]}
-              placeholder="Search items..."
+              placeholder="Search by name, code, description..."
               placeholderTextColor={colors.placeholder}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -237,6 +382,41 @@ const CollectionScreen = ({ route, navigation }) => {
                 : 'Filter by Tags'}
             </Text>
           </TouchableOpacity>
+
+          {/* View controls container */}
+          <View style={styles.viewControlsContainer}>
+            {/* High Value Filter Toggle */}
+            <TouchableOpacity
+              style={[
+                styles.compactFilterButton,
+                { 
+                  backgroundColor: showHighValueOnly ? colors.gold : colors.border,
+                  borderColor: showHighValueOnly ? colors.goldDark : colors.border,
+                }
+              ]}
+              onPress={() => setShowHighValueOnly(!showHighValueOnly)}
+            >
+              <Text style={styles.diamondIcon}>💎</Text>
+            </TouchableOpacity>
+
+            {/* View Mode Toggle */}
+            <TouchableOpacity
+              style={[
+                styles.viewModeButton,
+                { 
+                  backgroundColor: colors.primary,
+                  borderColor: colors.primaryDark,
+                }
+              ]}
+              onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+            >
+            <Ionicons 
+              name={viewMode === 'list' ? 'grid' : 'list'} 
+              size={20} 
+              color="#fff" 
+            />
+          </TouchableOpacity>
+          </View>
           
           {showTagFilter && (
             <ScrollView 
@@ -296,12 +476,15 @@ const CollectionScreen = ({ route, navigation }) => {
           data={sortedItems}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
+          key={viewMode} // Force re-render when view mode changes
+          numColumns={viewMode === 'grid' ? 3 : 1}
+          columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : null}
           ListEmptyComponent={
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               {searchQuery ? 'No items match your search' : 'No items yet'}
             </Text>
           }
-          contentContainerStyle={{ paddingBottom: 80 }}
+          contentContainerStyle={{ paddingBottom: 80, paddingHorizontal: viewMode === 'grid' ? 12 : 0 }}
         />
       )}
       
@@ -413,6 +596,60 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
+  itemsCounterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  counterInfoContainer: {
+    flex: 1,
+  },
+  itemsCounterText: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    marginBottom: 4,
+  },
+  totalInvestedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  cashIcon: {
+    marginRight: 4,
+  },
+  totalInvestedText: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  clearFiltersButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  clearFiltersButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   tagFilterContainer: {
     marginBottom: 16,
   },
@@ -423,6 +660,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  viewControlsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+  },
+  compactFilterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  diamondIcon: {
+    fontSize: 20,
+  },
+  viewModeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -485,6 +758,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 40,
     fontSize: 16,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  gridItem: {
+    flex: 1,
+    maxWidth: '31%',
+    marginHorizontal: '1%',
   },
   fab: {
     position: 'absolute',

@@ -17,7 +17,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Necesitamos acceder a la cámara para tomar fotos",
         "NSPhotoLibraryUsageDescription": "Necesitamos acceder a la galería para seleccionar imágenes"
-      }
+      },
+      "bundleIdentifier": "com.sfrag.coleccionesapp"
     },
     "android": {
       "permissions": [
@@ -29,11 +30,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.sfrag.coleccionesapp",
-      "compileSdkVersion": 34,
-      "targetSdkVersion": 34,
-      "buildToolsVersion": "34.0.0"
+      "versionCode": 6
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,6 +40,7 @@
       "eas": {
         "projectId": "2de3381b-8f83-4b38-9849-308b050206fe"
       }
-    }
+    },
+    "scheme": "coleccionesapp"
   }
 }

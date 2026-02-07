@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/theme';
 import { useAuth } from '../context/AuthContext';
 import CollectionItem from '../components/CollectionItem';
+import ThemeToggle from '../components/ThemeToggle';
 import {
   getUserProfile,
   followUser,
@@ -25,7 +26,7 @@ import {
 const UserProfileScreen = ({ route, navigation }) => {
   const { userId } = route.params;
   const { colors } = useTheme();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, signOut } = useAuth();
   
   const [profile, setProfile] = useState(null);
   const [collections, setCollections] = useState([]);
@@ -273,6 +274,16 @@ const UserProfileScreen = ({ route, navigation }) => {
             </View>
           </View>
 
+          {/* Theme Toggle - only for own profile */}
+          {isOwnProfile && (
+            <View style={styles.themeToggleSection}>
+              <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+                Appearance
+              </Text>
+              <ThemeToggle />
+            </View>
+          )}
+
           {/* Follow Button */}
           {currentUser && !isOwnProfile && (
             <TouchableOpacity
@@ -303,18 +314,44 @@ const UserProfileScreen = ({ route, navigation }) => {
 
           {/* Edit Profile Button for own profile */}
           {isOwnProfile && (
-            <TouchableOpacity
-              style={[styles.editButton, { backgroundColor: colors.border }]}
-              onPress={() => {
-                // TODO: Navigate to edit profile screen
-                Alert.alert('Coming Soon', 'Profile editing will be available soon');
-              }}
-            >
-              <Ionicons name="create-outline" size={20} color={colors.text} />
-              <Text style={[styles.editButtonText, { color: colors.text }]}>
-                Edit Profile
-              </Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={[styles.editButton, { backgroundColor: colors.border }]}
+                onPress={() => {
+                  // TODO: Navigate to edit profile screen
+                  Alert.alert('Coming Soon', 'Profile editing will be available soon');
+                }}
+              >
+                <Ionicons name="create-outline" size={20} color={colors.text} />
+                <Text style={[styles.editButtonText, { color: colors.text }]}>
+                  Edit Profile
+                </Text>
+              </TouchableOpacity>
+
+              {/* Logout Button */}
+              <TouchableOpacity
+                style={[styles.logoutButton, { backgroundColor: '#ff3b30' }]}
+                onPress={() => {
+                  Alert.alert(
+                    'Logout',
+                    'Are you sure you want to logout?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Logout',
+                        style: 'destructive',
+                        onPress: async () => {
+                          await signOut();
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Ionicons name="log-out-outline" size={20} color="#fff" />
+                <Text style={styles.logoutButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
 
@@ -478,10 +515,24 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     gap: 8,
+    marginBottom: 12,
   },
   editButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
   collectionsSection: {
     marginHorizontal: 16,
@@ -552,6 +603,16 @@ const styles = StyleSheet.create({
   collectionStats: {
     flexDirection: 'row',
     gap: 16,
+  },
+  themeToggleSection: {
+    marginBottom: 24,
+    padding: 16,
+    borderRadius: 12,
+  },
+  themeToggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
   },
   statItem: {
     flexDirection: 'row',

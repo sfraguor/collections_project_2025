@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'rea
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/theme';
 import { EditIcon, DeleteIcon } from './AppIcons';
+import { formatCurrency } from '../utils/currencyUtils';
 
 /**
  * A reusable component for displaying an item in a collection
@@ -42,22 +43,48 @@ export default function ItemCard({
         colors={[colors.cardGradientStart, colors.cardGradientEnd]}
         style={styles.cardGradient}
       >
-  {item.images && item.images.length > 0 ? (
-    <Image source={{ uri: item.images[0] }} style={styles.coverImage} />
-  ) : item.image ? (
-    // For backward compatibility with old items that have a single image
-    <Image source={{ uri: item.image }} style={styles.coverImage} />
-  ) : (
-    <View style={[
-      styles.coverImage, 
-      styles.noImageContainer,
-      { backgroundColor: colors.border }
-    ]}>
-      <Text style={[styles.noImageText, { color: colors.textSecondary }]}>No Image</Text>
-    </View>
-  )}
-      <View style={styles.cardTextContainer}>
+        <View style={styles.cardContent}>
+          {/* Image on the left */}
+          {item.images && item.images.length > 0 ? (
+            <View style={styles.imageContainer}>
+              <Image source={{ uri: item.images[0] }} style={styles.coverImage} resizeMode="cover" />
+              {item.highValue && (
+                <View style={[styles.highValueBadge, { backgroundColor: colors.gold }]}>
+                  <Text style={styles.highValueBadgeText}>💎</Text>
+                </View>
+              )}
+            </View>
+          ) : item.image ? (
+            <View style={styles.imageContainer}>
+              <Image source={{ uri: item.image }} style={styles.coverImage} resizeMode="cover" />
+              {item.highValue && (
+                <View style={[styles.highValueBadge, { backgroundColor: colors.gold }]}>
+                  <Text style={styles.highValueBadgeText}>💎</Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={[
+              styles.coverImage, 
+              styles.noImageContainer,
+              { backgroundColor: colors.border }
+            ]}>
+              <Text style={[styles.noImageText, { color: colors.textSecondary }]}>No Image</Text>
+            </View>
+          )}
+
+          {/* Content on the right */}
+          <View style={styles.cardTextContainer}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>{item.name}</Text>
+        
+        {item.cardNumber ? (
+          <View style={styles.cardNumberContainer}>
+            <Text style={[styles.cardNumberBadge, { backgroundColor: colors.accent }]}>
+              #{item.cardNumber}
+            </Text>
+          </View>
+        ) : null}
+        
         {item.description ? (
           <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]} numberOfLines={2}>
             {item.description}
@@ -65,7 +92,7 @@ export default function ItemCard({
         ) : null}
         {item.price ? (
           <Text style={[styles.cardPrice, { color: colors.text }]}>
-            Price: {item.price}
+            Price: {formatCurrency(item.price, item.currency || item.purchase_currency)}
           </Text>
         ) : null}
         {item.condition ? (
@@ -73,6 +100,23 @@ export default function ItemCard({
             Condition: {item.condition}
           </Text>
         ) : null}
+        
+        {/* Custom fields for specific categories */}
+        {item.custom_fields?.author && (
+          <Text style={[styles.cardCustomField, { color: colors.textSecondary }]}>
+            Autor: {item.custom_fields.author}
+          </Text>
+        )}
+        {item.custom_fields?.style && (
+          <Text style={[styles.cardCustomField, { color: colors.textSecondary }]}>
+            Estilo: {item.custom_fields.style}
+          </Text>
+        )}
+        {item.custom_fields?.height && (
+          <Text style={[styles.cardCustomField, { color: colors.textSecondary }]}>
+            📏 Altura: {item.custom_fields.height} cm
+          </Text>
+        )}
         
         {item.tags && item.tags.length > 0 ? (
           <ScrollView 
@@ -91,7 +135,8 @@ export default function ItemCard({
             ))}
           </ScrollView>
         ) : null}
-      </View>
+          </View>
+        </View>
       </LinearGradient>
       <View style={styles.cardActions}>
         <TouchableOpacity
@@ -128,44 +173,90 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
   },
+  cardContent: {
+    flexDirection: 'row',
+    padding: 12,
+  },
   coverImage: {
-    width: '100%',
-    height: 180,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    width: 110,
+    height: 140,
+    borderRadius: 12,
+  },
+  imageContainer: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  highValueBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
+  },
+  highValueBadgeText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 0.5,
   },
   noImageContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
   noImageText: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '500',
   },
   cardTextContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  cardNumberContainer: {
+    flexDirection: 'row',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  cardNumberBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'white',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     letterSpacing: 0.3,
+    marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '400',
-    marginTop: 4,
-    lineHeight: 20,
+    marginTop: 2,
+    lineHeight: 18,
   },
   cardPrice: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    marginTop: 6,
+    marginTop: 4,
   },
   cardCondition: {
-    fontSize: 15,
+    fontSize: 13,
     marginTop: 2,
+  },
+  cardCustomField: {
+    fontSize: 13,
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   cardActions: {
     flexDirection: 'row',
@@ -214,7 +305,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   tagsScrollView: {
-    marginTop: 6,
+    marginTop: 4,
   },
   tagsContainer: {
     paddingRight: 8,
